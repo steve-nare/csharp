@@ -1,0 +1,405 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Text;
+using System.Windows.Forms;
+using System.IO; /*Gestion des fichiers*/
+
+namespace PSEU
+{
+    public partial class Form2 : Form
+    {
+        double glob_nbr_line = 0;
+
+        public Form2()
+        {
+            InitializeComponent();
+            Init_Form2();
+        }
+
+        private void Init_Form2()
+        {
+            toolStripStatusLabel1.Text = "Ready";
+        }
+
+        private void openFileDialog1_FileOk(object sender, CancelEventArgs e)
+        {
+
+        }
+
+        /*Click sur le bouton "Search..."*/
+        private void button3_Click(object sender, EventArgs e)
+        {
+            string link;
+            //string file_error = "";
+            //int ver_atp_return;
+
+            Directory.SetCurrentDirectory("./ATP");
+            OpenFileDialog openFileDialog1 = new OpenFileDialog();
+            openFileDialog1.Filter = "ATP Files|*.atp";
+            openFileDialog1.Title = "Select an *.ATP file";
+            openFileDialog1.InitialDirectory = ".\\ATP\\";
+
+            /*Affichage de la fenêtre d'ouverture de fichier*/
+            if (openFileDialog1.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                groupBox6.Enabled = true;
+                link = openFileDialog1.FileName.ToString();
+                textBox1.Text = link;
+                textBox1.SelectAll(); //Permet de voir directement la fin de l'adresse du fichier source
+
+                glob_nbr_line = 0;
+
+                /*Si verify_atp(link) retourne -1, tout s'est bien passé*/
+
+                if (verify_atp(link))
+                {
+                    groupBox2.Enabled = true;
+                    toolStripStatusLabel1.Text = "ATP files successfully checked !";
+                }
+                else
+                {
+                    groupBox2.Enabled = false;
+                    toolStripStatusLabel1.Text = "Error: ATP files unsuccessfully checked !";
+                }
+            }
+            Directory.SetCurrentDirectory(".."); //Une fois fini, on remonte dans le répertoire parent
+        }
+
+        private bool verify_atp(string link)
+        {
+            /*Vérification que le fichier appelé est bien présent dans le dossier ATP*/
+            StringBuilder builder = new StringBuilder();
+            foreach (string val in Directory.GetFiles(Directory.GetCurrentDirectory()))
+            {
+                builder.Append(val.ToUpper());
+                builder.Append('.');
+            }
+
+            //On ne garde qu'un lien relatif
+            link = link.Split('\\')[link.Split('\\').Length - 1];
+
+            /*On vérifie si le fichier passé en paramètre existe*/
+            if (builder.ToString().Contains(link.ToUpper()) == false || builder.ToString()[builder.ToString().IndexOf(link.ToUpper()) - 1] != '\\')
+            {
+                MessageBox.Show(link + " does not exist !", "File error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+            
+            StreamReader mainATPfile = new StreamReader(@link);
+            string[] str = mainATPfile.ReadToEnd().Split('\n');
+            int nbr_lines = str.Length;
+            glob_nbr_line += nbr_lines;
+            /*Ajout d'un retour à la ligne sur la dernière ligne pour régler les problèmes d'indexation*/
+            str[nbr_lines - 1] += "\r\n";
+
+            int num_IOS; //Numéro d'entrée / sortie / capteur
+            int value;
+            string exec_com;
+
+            for (int i = 0; i < nbr_lines; i = i + 1)
+            {
+                /*Switch - case sur le premier caractère de la commande*/
+                switch (str[i][0])
+                {
+                    case 'p':
+                        if(str[i].Length >= 5)
+                        {
+                            num_IOS = str[i][1] - 48; //-48 pour faire la conversion ASCII
+                            value = str[i][3] - 48;
+                            
+                            if ((num_IOS == 1 || num_IOS == 2) && (value == 0 || value == 1))
+                            {
+                                break;
+                            }
+                        }
+                        goto default;
+                    case 'i':
+                        if (str[i].Length == 5)
+                        {
+                            num_IOS = str[i][1] - 48;
+                            value = str[i][3] - 48;
+                        }
+                        else if (str[i].Length > 5)
+                        {
+                            num_IOS = (str[i][1] - 48) * 10 + str[i][2] - 48;
+                            value = str[i][4] - 48;
+                        }
+                        else
+                        {
+                            /*Valeurs qui invalideront la reconnaissance de la commande*/
+                            num_IOS = 0;
+                            value = 0;
+                        }
+                        
+                        if (num_IOS >= 1 && num_IOS <= 18 && (value == 0 || value == 1))
+                        {
+                            break;
+                        }
+                        goto default;
+                    case 's':
+                        if (str[i].Length == 5)
+                        {
+                            num_IOS = str[i][1] - 48;
+                            value = str[i][3];
+                        }
+                        else if (str[i].Length > 5)
+                        {
+                            num_IOS = (str[i][1] - 48) * 10 + str[i][2] - 48;
+                            value = str[i][4];
+                        }
+                        else
+                        {
+                            /*Valeurs qui invalideront la reconnaissance de la commande*/
+                            num_IOS = 0;
+                            value = 0;
+                        }
+
+                        if (num_IOS >= 1 && num_IOS <= 24 && (value == 'n' || value == 'm' || value == 'f' || value == 'o' || value == 's'))
+                        {
+                            break;
+                        }
+                        goto default;
+                    case 'o':
+                        if (str[i].Length == 5)
+                        {
+                            num_IOS = str[i][1] - 48;
+                            value = str[i][3];
+                        }
+                        else if (str[i].Length > 5)
+                        {
+                            num_IOS = (str[i][1] - 48) * 10 + str[i][2] - 48;
+                            value = str[i][4];
+                        }
+                        else
+                        {
+                            /*Valeurs qui invalideront la reconnaissance de la commande*/
+                            num_IOS = 0;
+                            value = 0;
+                        }
+
+                        if (num_IOS >= 1 && num_IOS <= 46 && (value == 'l' || value == 'o' || value == 's'))
+                        {
+                            break;
+                        }
+                        goto default;
+                    case '-':
+                        if (str[i].Length >= 3)
+                        {
+                            /*Switch - case sur le second caractère de la commande*/
+                            switch (str[i][1])
+                            {
+                                /*Reset du banc de test*/
+                                case 'r':
+                                    //FAIRE ICI LE RESET DU SYSTEME
+                                    break;
+                                /*Execute la liste de commande du fichier ATP\nom.atp*/
+                                case 'g':
+                                    if (str[i].Length >= 5)
+                                    {
+                                        exec_com = "";
+                                        for (int j = 3; str[i][j] != '\r'; j = j + 1)
+                                        {
+                                            exec_com += str[i][j];
+                                        }
+                                        exec_com += ".ATP";
+
+                                        if (verify_atp(exec_com) == true)
+                                        {
+                                            break;
+                                        }
+                                        else
+                                        {
+                                            mainATPfile.Close();
+                                            return false;
+                                        }
+                                    }
+                                    goto default;
+                                /*Commentaire à afficher dans le label2*/
+                                case '|':
+                                    if (str[i].Length >= 5)
+                                    {
+                                        break;
+                                    }
+                                    goto default;
+                                /*Commentaire d'ordre général : on ignore*/
+                                case '*':
+                                    break;
+                                /*Pause : MessageBox Yes.No pour continuer ou quitter*/
+                                case 'p':
+                                    if (str[i].Length >= 5)
+                                    {
+                                        break;
+                                    }
+                                    goto default;
+                                /*Temporisation de xxx ms*/
+                                case 'w':
+                                    if (str[i].Length >= 5)
+                                    {
+                                        exec_com = "";
+                                        for (int j = 3; str[i][j] != '\r'; j = j + 1)
+                                        {
+                                            exec_com += str[i][j];
+                                        }
+                                        
+                                        /*Test si la conversion string -> int fonctionne*/
+                                        if(Int32.TryParse(exec_com, out value))
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    goto default;
+                                /*Test la sortie - ex: "-c o1 1" test si la sortie o1 est active*/
+                                case 'c':
+                                    //C'est ici que l'on va modifier l'état de sorties "retour" dans le Form1
+                                    //Test de sorties : si elles sont dans l'état souhaité, on continue, sinon on quitte avec mess. err ?
+                                    //A FAIRE
+                                    break;
+                                default:
+                                    mainATPfile.Close();
+                                    MessageBox.Show("Unrecognized command\n\nFile: " + link + "\nLine: " + (i + 1), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                    return false;
+                            }
+                        }
+                        else
+                        {
+                            goto default;
+                        }
+                        break;
+                    case '\r':
+                        break;
+                    case '\n':
+                        break;
+                    default:
+                        mainATPfile.Close();
+                        MessageBox.Show("Unrecognized command\n\nFile: " + link + "\nLine: " + (i + 1), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return false;
+                }
+            }
+
+            /*Fermeture du fichier*/
+            mainATPfile.Close();
+
+            return true;
+        }
+
+        /*Fonction qui vérifie que le nom du dernier log est bien conforme*/
+        private string check_log_file()
+        {
+            string[] files_dir;
+            string filename;
+            int no_file;
+            Directory.SetCurrentDirectory("./LOG");
+
+            /*Récupération de la liste des fichiers du dossier LOG*/
+            files_dir = Directory.GetFiles(Directory.GetCurrentDirectory());
+            Directory.SetCurrentDirectory("..");
+
+            /*Extraction du dernier nom de fichier du dossier*/
+            filename = files_dir[files_dir.Length - 1].Split('\\')[files_dir[files_dir.Length - 1].Split('\\').Length - 1];
+
+            /*Récupération numéro du dernier fichier et incrémentation*/
+            if (Int32.TryParse(filename.Remove(filename.Length - 4, 4), out no_file))
+            {
+                return ""; //Si la convertion réussi, on ne retourne rien
+            }
+            else
+            {
+                return filename; //Si elle échoue, on retourne le nom du fichier qui n'est pas au bon format
+            }
+        }
+
+        /*Méthode publique qui permet de récupérer dans la fenêtre parent la source du fichier apt ouvert*/
+        public string return_link()
+        {
+            return textBox1.Text.Split('\\')[textBox1.Text.Split('\\').Length - 1];;
+        }
+
+        /*Méthode publique qui permet de récupérer dans la fenêtre parent si l'utilisateur veut un log*/
+        public bool return_logYN()
+        {
+            return radioButton1.Checked;
+        }
+
+        /*Méthode publique qui permet de récupérer dans la fenêtre parent le nom de l'utilisateur*/
+        public string return_user_name()
+        {
+            return textBox2.Text.ToString();
+        }
+
+        /*Méthode publique qui permet de récupérer dans la fenêtre parent le numéro de série*/
+        public string return_SN()
+        {
+            return textBox3.Text.ToString();
+        }
+
+        /*Méthode publique qui permet de récupérer dans la fenêtre parent les commentaires utilisateur*/
+        public string return_comments()
+        {
+            return richTextBox1.Text.ToString();
+        }
+
+        /*Méthode publique qui permet de récupérer dans la fenêtre parent le nombre de lignes globales du fichier*/
+        public double return_glob_nbr_line()
+        {
+            return glob_nbr_line;
+        }
+
+        /*Click sur le bouton "Yes" pr la création du log*/
+        private void radioButton1_MouseUp(object sender, MouseEventArgs e)
+        {
+            string return_check;
+            string err_mess;
+
+            return_check = check_log_file();
+            if (return_check == "")
+            {
+                groupBox3.Enabled = true;
+                button1.Enabled = false;
+                textBox2.Focus();
+            }
+            else
+            {
+                err_mess = "The last log file's name ("+return_check+") is invalid. Please correct it before trying again. \n\nReminder:\nLogs files must be ###.LOG, where ### is the log's number.\nIt mustn't contain letters before its extension.";
+                MessageBox.Show(err_mess, "Last log file: invalid name", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /*Click sur le bouton "No" pr la création du log*/
+        private void radioButton2_MouseUp(object sender, MouseEventArgs e)
+        {
+            textBox2.Text = "";
+            groupBox3.Enabled = false;
+            textBox3.Text = "";
+            groupBox4.Enabled = false;
+            richTextBox1.Text = "";
+            groupBox5.Enabled = false;
+            button1.Enabled = true;
+        }
+
+        private void textBox2_TextChanged(object sender, EventArgs e)
+        {
+            groupBox4.Enabled = true;
+        }
+
+        private void textBox3_TextChanged(object sender, EventArgs e)
+        {
+            groupBox5.Enabled = true;
+        }
+
+        private void richTextBox1_TextChanged(object sender, EventArgs e)
+        {
+            button1.Enabled = true;
+        }
+
+        /*Appuie sur le bouton validate*/
+        private void button1_Click(object sender, EventArgs e)
+        {
+            /*Form3 DispCommands = new Form3(return_link(), return_logYN(), return_user_name(), return_SN(), return_comments());
+            DispCommands.TopMost = true; //Fenêtre toujours au premier plan
+            DispCommands.Show();*/
+        }
+    }
+}
