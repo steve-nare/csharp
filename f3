@@ -1,0 +1,568 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Text;
+using System.Windows.Forms;
+using System.IO; /*Gestion des fichiers*/
+using System.Threading;
+using System.Globalization;
+using System.Diagnostics; //pour l'utiisation de stopwatch
+
+namespace PSEU
+{
+    public partial class Form3 : Form
+    {
+        /*Variables globales*/
+        string link;
+        bool logYN;
+        string username;
+        string SN;
+        string comments;
+        double glob_nbr_line;
+        double current_progress = 0;
+        int percent = 0;
+        string log_content = "";
+        Form1 frm1;
+        Thread commands;
+        bool cancel = false;
+        bool fail = false;
+        
+        Stopwatch sw = new Stopwatch();
+        long microseconds = 0;
+
+        public Form3(string _link, bool _logYN, string _username, string _SN, string _comments, double _glob_nbr_line, Form1 _frm1)
+        {
+            InitializeComponent();
+            this.Activate();
+            this.richTextBox1.LostFocus += new System.EventHandler(goTransparent);
+            this.richTextBox1.GotFocus += new System.EventHandler(goOpaque);
+
+            /*Récupération des variables passées en paramètre à la Form3*/
+            link = _link;
+            logYN = _logYN;
+            username = _username;
+            SN = _SN;
+            comments = _comments;
+            glob_nbr_line = _glob_nbr_line;
+            frm1 = _frm1;
+
+            /*Désactivation des contrôles de forçage*/
+            frm1.force_disable();
+
+            /*Association de la méthode "start_commands" à appeler au début de ce Thread*/
+            commands = new Thread(new ThreadStart(begin_proc));
+
+            /*Désactivation du contrôle inter-thread
+             --> pas gênant ici car pas de risque de conflit entre les différents threads
+             car seul le thread "commands" va modifier les valeurs des labels, richtextbox...*/
+            CheckForIllegalCrossThreadCalls = false;
+
+            toolStripStatusLabel1.Text = "Ready";
+        }
+
+        private void goTransparent(object sender, EventArgs e)
+        {
+            //this.Opacity = 0.7;
+            this.Opacity = 1;
+            //this.richTextBox1.BackColor = Color.Silver;
+        }
+
+        private void goOpaque(object sender, EventArgs e)
+        {
+            this.Opacity = 1;
+            this.richTextBox1.BackColor = Color.Black;
+        }
+
+        /*Click dans la richtextbox pour démarrer*/
+        private void richTextBox1_Click(object sender, EventArgs e)
+        {
+            toolStripProgressBar1.Visible = true;  
+            commands.Start();
+        }
+
+        private void begin_proc()
+        {
+            /*** Ici, pas de vérification quant aux fichiers car déjà fait dans la fonction "verify_atp" de Form2 ***/
+            string date_start = DateTime.Now.ToString();
+            string date_stop;
+            bool success;
+
+            /*Initialisation du système avant tout envoit de commandes*/
+            //frm1.init_sys();
+            //frm1.cde_reset();
+
+            richTextBox1.Text = "";
+            label1.Text = "";
+            label2.Text = "";
+
+            /*Désactivation du click de start au démarrage*/
+            richTextBox1.Click -= new System.EventHandler(this.richTextBox1_Click);
+
+            /*Initilisation de la barre de progression*/
+            toolStripProgressBar1.Minimum = 0;
+            toolStripProgressBar1.Maximum = 100;
+            toolStripProgressBar1.Value = percent;          
+
+            /*Lancement de la fonction qui va analyser les commandes*/
+            toolStripStatusLabel1.Text = "Running ATP...";
+            Directory.SetCurrentDirectory("./ATP");
+            success = start_commands(link);
+            Directory.SetCurrentDirectory("..");
+            
+            success = success & (!fail);
+            toolStripStatusLabel1.Text = "Test finished - ";
+            if (success)
+            {
+                toolStripStatusLabel1.Text += "SUCCESS !";
+            }
+            else
+            {
+                toolStripStatusLabel1.Text += "FAIL !";
+            }
+
+            date_stop = DateTime.Now.ToString();
+
+            if (logYN)
+            {
+                log_write(date_start, date_stop, success);
+            }
+        }
+
+        private void end_proc()
+        {
+        }
+
+        private bool start_commands(string link)
+        {
+            StreamReader mainATPfile = new StreamReader(@link);
+            string[] str = mainATPfile.ReadToEnd().Split('\n');
+            int nbr_lines = str.Length;
+            int percent_current;
+            /*Ajout d'un retour à la ligne sur la dernière ligne pour régler les problèmes d'indexation*/
+            str[nbr_lines - 1] += "\r\n";
+
+            int num_IOS; //Numéro d'entrée / sortie / capteur
+            int value;
+            int j; //Index de déplacement dans les lignes str[i]
+            string exec_com;
+
+            for (int i = 0; i < nbr_lines; i = i + 1)
+            {
+                frm1.disp_feedback();
+
+                percent_current = (i * 100) / nbr_lines;
+                label1.Text = link + "  ";
+                label11.Text = percent_current.ToString() + "%";
+                label111.Text = "line n° : " + (i + 1).ToString();
+
+                current_progress++;
+                percent = Convert.ToInt16((current_progress * 100) / glob_nbr_line);
+                toolStripStatusLabel1.Text = "Running ATP... (" + percent.ToString() + "%)";
+
+                toolStripProgressBar1.Value = percent;
+
+                richTextBox1.AppendText(str[i]);
+
+                /*richTextBox1.Text += str[i];
+                richTextBox1.SelectionStart = richTextBox1.Text.Length;
+                richTextBox1.ScrollToCaret();*/
+                log_content += str[i] + "\n";
+                
+                /*//Thread.Sleep(10);
+                //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
+                sw.Reset(); sw.Start();
+                microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
+                while (microseconds < 10000) { microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L)); }*/
+                
+                /*Fermeture des fichiers si l'utilisateur quitte la fenêtre en cours d'exécution des commandes*/
+                if (cancel)
+                {
+                    mainATPfile.Close();
+                    log_content += "\r\n>>> Test aborted by user <<<\r\n\r\n";
+                    return false;
+                }
+                
+                if (str[i].Length >= 3)
+                {                    
+                    if (str[i][2] == ' ')
+                    {
+                        j = 3;
+                    }
+                    else
+                    {
+                        j = 2;
+                    }
+                }
+                else
+                {
+                    j = 0;
+                }
+
+                /*Switch - case sur le premier caractère de la commande*/
+                switch (str[i][0])
+                {
+                    case 'p':
+                        num_IOS = str[i][1] - 48; //-48 pour faire la conversion ASCII
+                        value = str[i][3] - 48;
+                        if (num_IOS == 1)
+                        {
+                            if (value == 0)
+                            {
+                                frm1.alim1 = false;
+                                frm1.send_address("1", 16 + 2);
+                                //Thread.Sleep(10);
+                                //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
+                                sw.Reset(); sw.Start();
+                                microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
+                                while (microseconds < 10000) { microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L)); }
+                            }
+                            else if (value == 1)
+                            {
+                                frm1.alim1 = true;
+                                frm1.send_address("0", 16 + 2);
+                                //Thread.Sleep(10);
+                                //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
+                                sw.Reset(); sw.Start();
+                                microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
+                                while (microseconds < 10000) { microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L)); }
+                            }
+                        }
+                        else if (num_IOS == 2)
+                        {
+                            if (value == 0)
+                            {
+                                frm1.alim2 = false;
+                                frm1.send_address("1", 16 + 3);
+                                //Thread.Sleep(10);
+                                //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
+                                sw.Reset(); sw.Start();
+                                microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
+                                while (microseconds < 10000) { microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L)); }
+                            }
+                            else if (value == 1)
+                            {
+                                frm1.alim2 = true;
+                                frm1.send_address("0", 16 + 3);
+                                //Thread.Sleep(10);
+                                //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
+                                sw.Reset(); sw.Start();
+                                microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
+                                while (microseconds < 10000) { microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L)); }
+                            }
+                        }
+                        
+                        /*A METTRE ?*/
+                        //frm1.disp_force('p', num_IOS, value.ToString());
+
+                        break;
+                    /*Positionnement des entrées discretes (I1 ... I18)*/
+                    case 'i':
+                        if (str[i].Length == 5)
+                        {
+                            num_IOS = str[i][1] - 48;
+                            value = str[i][3] - 48;
+                        }
+                        else
+                        {
+                            num_IOS = (str[i][1] - 48) * 10 + str[i][2] - 48;
+                            value = str[i][4] - 48;
+                        }
+                        //old_cell_i = frm1.disp_force('i', num_IOS, value.ToString(), old_cell_i);
+                        frm1.disp_force('i', num_IOS, value.ToString());
+                        frm1.cde_variable(2, num_IOS - 1);
+
+                        break;
+                    /*Positionnement des capteurs (S1 ... S24)*/
+                    case 's':
+                        if (str[i].Length == 5)
+                        {
+                            num_IOS = str[i][1] - 48;
+                            value = str[i][3];
+                        }
+                        else
+                        {
+                            num_IOS = (str[i][1] - 48) * 10 + str[i][2] - 48;
+                            value = str[i][4];
+                        }
+                        //old_cell_s = frm1.disp_force('s', num_IOS, Convert.ToChar(value).ToString(), old_cell_s);
+                        frm1.disp_force('s', num_IOS, Convert.ToChar(value).ToString());
+                        frm1.cde_variable(3, num_IOS - 1); 
+
+                        break;
+                    /*Positionnement des charges de sorties (O1 ... O46)*/
+                    case 'o':
+                        if (str[i].Length == 5)
+                        {
+                            num_IOS = str[i][1] - 48;
+                            value = str[i][3];
+                        }
+                        else
+                        {
+                            num_IOS = (str[i][1] - 48) * 10 + str[i][2] - 48;
+                            value = str[i][4];
+                        }
+                        //old_cell_o = frm1.disp_force('o', num_IOS, Convert.ToChar(value).ToString(), old_cell_o);
+                        frm1.disp_force('o', num_IOS, Convert.ToChar(value).ToString());
+                        frm1.cde_variable(1, num_IOS - 1); 
+
+                        break;
+                    case '-':
+                        /*Switch - case sur le second caractère de la commande*/
+                        switch (str[i][1])
+                        {
+                            /*Reset du banc de test*/
+                            case 'r':
+                                frm1.cde_reset();
+                                
+                                break;
+                            /*Execute la liste de commande du fichier ATP\nom.atp*/
+                            case 'g':
+                                exec_com = "";
+                                while (str[i][j] != '\r')
+                                {
+                                    exec_com += str[i][j];
+                                    j = j + 1;
+                                }
+                                exec_com += ".ATP";
+
+                                //Si un sous-fichier atp se termine mal, on ferme ceux ouvert au dessus
+                                if (start_commands(exec_com) == false)
+                                {
+                                    mainATPfile.Close();
+                                    return false;
+                                }
+
+                                break;
+                            /*Commentaire à afficher dans le label2*/
+                            case '|':
+                                exec_com = "";
+                                while (str[i][j] != '\r')
+                                {
+                                    exec_com += str[i][j];
+                                    j = j + 1;
+                                }
+                                label2.Text = exec_com;
+
+                                break;
+                            /*Commentaire d'ordre général : on ignore*/
+                            case '*':
+                                break;
+                            /*Pause : MessageBox Yes.No pour continuer ou quitter*/
+                            case 'p':
+                                exec_com = "";
+                                while (str[i][j] != '\r')
+                                {
+                                    exec_com += str[i][j];
+                                    j = j + 1;
+                                }
+                                if (MessageBox.Show(exec_com, "Check", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                                {
+                                    mainATPfile.Close();
+                                    MessageBox.Show("Test aborted by user", "Test aborted", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                                    log_content += "\r\n>>> Test aborted by user <<<\r\n\r\n";
+                                    return false;
+                                }
+
+                                break;
+                            /*Temporisation de xxx ms*/
+                            case 'w':
+                                exec_com = "";
+                                for (j = 3; str[i][j] != '\r'; j = j + 1)
+                                {
+                                    exec_com += str[i][j];
+                                }
+                                value = Convert.ToInt32(exec_com);
+                                //Thread.Sleep(value);
+                                //attente de value*1000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
+                                sw.Reset(); sw.Start();
+                                microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
+                                while (microseconds < value*1000) { microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L)); }
+                                break;
+                            /*Test la sortie - ex: "-c o1 1" test si la sortie o1 est active*/
+                            case 'c':
+                                if (str[i][3] == 'o')
+                                {
+                                    if (str[i].Length == 8)
+                                    {
+                                        num_IOS = str[i][4] - 48;
+                                        value = str[i][6] - 48;
+                                    }
+                                    else
+                                    {
+                                        num_IOS = (str[i][4] - 48) * 10 + str[i][5] - 48;
+                                        value = str[i][7] - 48;
+                                    }
+
+
+                                    //if (!(((value == 1) && (frm1.outp[num_IOS - 1] == false)) || ((value == 0) && (frm1.outp[num_IOS - 1] == true))))
+                                    if (!(((value == 1) && (frm1.outp[num_IOS - 1] == false)) || ((value == 0) && (frm1.outp[num_IOS - 1] == true))))
+                                    {
+                                        fail = true;
+
+                                        if (MessageBox.Show("Test failed while calling this command line (this is not a syntax error):\n"
+                                            + str[i] + "(" + link + " > line " + (i + 1).ToString() + ")\n\n Do you want to continue anyway?",
+                                            "Test failed !", MessageBoxButtons.YesNo, MessageBoxIcon.Error) != DialogResult.Yes)
+                                        {
+                                            mainATPfile.Close();
+                                            return false;
+                                        }
+
+                                        log_content += "\r\n>>> Test failed with \""+ str[i] + "\" (" + link + " > line " + (i + 1).ToString() + ") <<<\r\n\r\n";
+                                    }
+                                }
+
+                                break;
+                            default:
+                                break;
+                        }
+
+                        break;
+                    case '\r':
+                        break;
+                    case '\n':
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            frm1.disp_feedback();
+
+            /*Fermeture du fichier*/
+            mainATPfile.Close();
+
+            return true;
+        }
+
+        private void log_write(string date_start, string date_stop, bool success)
+        {
+            string[] files_dir;
+            string filename;
+            int no_file;
+            string header, footer;
+            Directory.SetCurrentDirectory("./LOG");
+
+            /*Récupération de la liste des fichiers du dossier LOG*/
+            files_dir = Directory.GetFiles(Directory.GetCurrentDirectory());
+            
+            /*Extraction du dernier nom de fichier du dossier*/
+            filename = files_dir[files_dir.Length - 1].Split('\\')[files_dir[files_dir.Length - 1].Split('\\').Length - 1];
+
+            /*Récupération numéro du dernier fichier et incrémentation*/
+            filename = filename.Remove(filename.Length - 4, 4);
+           
+            no_file = Convert.ToInt32(filename); //Pas de vérif que la conversion est possible car déjà fait dans Form2
+            no_file = no_file + 1;
+            filename = no_file.ToString() + ".LOG";
+
+            StreamWriter file = new StreamWriter(filename);
+            
+            header = "ELDEC France\r\nAutomatic test C27-J PSEU\r\nUser's name\t: " + username + "\r\nPart number\t: 79A81\r\n";
+            header += "Serial number\t: " + SN + "\r\nComments\t: " + comments + "\r\nCommand File\t: "+link;
+            header += "\r\n\r\nDate\t" + date_start.Split(' ')[0] + "\r\nTime\t" + date_start.Split(' ')[1] + "\r\n\r\n";
+            footer = "\r\n\r\nTime\t" + date_stop.Split(' ')[1] + "\r\n";
+            if (success)
+            {
+                footer += "Automatic Test PASSED";
+            }
+            else
+            {
+                footer += "Automatic Test FAILED";
+            }
+            footer += "\r\n\r\nEnd of test";
+            //log_content = log_content.Remove(log_content.Length - 1);
+            //MessageBox.Show(log_content.Split('\r').Length.ToString());
+            file.Write(header + log_content + footer);
+            file.Close();
+            
+            Directory.SetCurrentDirectory("..");
+        }
+
+        private void Form3_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (commands.IsAlive)
+            {
+                if (MessageBox.Show("Are you sure you want to terminate the process?", "Exit?", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    cancel = true;
+                    if (commands.IsAlive) // Si le thread n'est pas déjà fini
+                    {
+                        commands.Join(); // On attend que le thread soit terminé
+                    }
+                    
+                    /*Réactivation des contrôles de forçage manuels*/
+                    frm1.force_enable();
+                    
+                    if (frm1.board != null)
+                    {
+                        frm1.timer_feedback.Enabled = true; //réactivation du timer d'affichage des retours en mode manuel
+                    }
+                }
+                else
+                {
+                    e.Cancel = true; //Si l'utilisateur ne confirme pas, alors on ne quitte pas la fenêtre
+                }
+            }
+            else
+            {
+                /*Réactivation des contrôles de forçage manuels*/
+                frm1.force_enable();
+                
+                if (frm1.board != null)
+                {
+                    frm1.timer_feedback.Enabled = true; //réactivation du timer d'affichage des retours en mode manuel
+                }
+            }            
+        }
+
+        /*private void button1_Click(object sender, EventArgs e)
+        {
+            int address;
+            byte data = 0;
+            string mask;
+
+            // ******************************************************* //
+            // ******************************************************* //
+            // * VOIR SI LA CARTE 1648 EST EN LOGIQUE INVERSE OU PAS * //
+            // ******************************************************* //
+            // ******************************************************* //
+
+            // *** OPERATION DE LECTURE D'UNE VALEUR *** //
+
+            //Lecture des entrées
+            for (int i = 0; i < 18; i++)
+            {
+                //A SUPPRIMER ? - PORT0 : Positionnement du banc à l'adresse voulue avec "disable input" des demux
+                mask = "0F00"; //2nd nibble à "1111" pour désactiver "enable input" des demux
+                address = Convert.ToInt16(adr_retour_I[i], 16) | Convert.ToInt16(mask, 16); //application du masque
+                address = (~address) & Convert.ToInt16("0FFF", 16); //Inversion car logique inverse + on masque le 1er nible du uint16
+                //frm1.board.Set32DigitalOutputsOn(0, (uint)address);
+                send_address(Convert.ToString(address, 2), 0);
+
+                //PORT0 : Positionnement du banc à l'adresse voulue et "enable input" des demux
+                address = Convert.ToInt16(adr_retour_I[i], 16); //application du masque
+                address = (~address) & Convert.ToInt16("0FFF", 16); //Inversion car logique inverse + on masque le 1er nible du uint16
+                //frm1.board.Set32DigitalOutputsOn(0, (uint)address);
+                send_address(Convert.ToString(address, 2), 0);
+
+                //PORT1 : Lecture du bit de donnée (LSB du PORT1)
+                frm1.board.Read1DigitalInput(32, ref data);
+                //MessageBox.Show(data.ToString());
+                Thread.Sleep(200);
+
+                //PORT0 : Positionnement du banc à l'adresse voulue avec "disable input" des demux
+                mask = "0F00"; //2nd nibble à "1111" pour désactiver "enable input" des demux
+                address = Convert.ToInt16(adr_retour_I[i], 16) | Convert.ToInt16(mask, 16); //application du masque
+                address = (~address) & Convert.ToInt16("0FFF", 16); //Inversion car logique inverse + on masque le 1er nible du uint16
+                //frm1.board.Set32DigitalOutputsOn(0, (uint)address);
+                send_address(Convert.ToString(address, 2), 0);
+            }
+            byte data = 0;
+            frm1.board.Read1DigitalInput(32, ref data);
+            MessageBox.Show(data.ToString());
+        }*/
+
+    }
+}
