@@ -1,0 +1,54 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Windows.Forms;
+
+namespace PSEU
+{
+    public partial class Form4 : Form
+    {
+        public Form4()
+        {
+            InitializeComponent();
+            BenchType.Items.Add("PC12");
+            BenchType.Items.Add("PC21");
+            BenchType.Items.Add("C-27J");
+            StartButton.Click += StartButton_Click;
+        }
+
+        private void pictureBox1_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void StartButton_Click(object sender, EventArgs e)
+        {
+            if (BenchType.SelectedItem != null && Application.OpenForms["Form1"] == null)
+            {
+                Form1 form1 = new Form1();
+                form1.Show();
+            }
+            else if (BenchType.SelectedItem == null)
+            {
+                Label notSupportedLabel = new Label();
+                notSupportedLabel.Text = "Not supported BenchType";
+                notSupportedLabel.Location = new Point(10, 10); // Adjust location as needed
+                this.Controls.Add(notSupportedLabel);
+            }
+        }
+
+        private void label4_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void QuitButton_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+    }
+}
