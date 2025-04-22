@@ -1,0 +1,8 @@
+base on all those file can you help me fix thisose issue:
+when i click on start button choosing C27-J the form1 control panel form appear but then if i use the close button to close form1 i would like the program to come back to the initial page but it is not the case and it generate an error on line 972 of f1.cs file System.ArgumentOutOfRangeException : 'L'index était hors limites. Il ne doit pas être négatif et doit être inférieur à la taille de la collection.
+Nom du paramètre : index'
+
+the second issue i have is that when i choose PC12 or PC21 then click start i get an error on line 1067 System.NullReferenceException : 'La référence d'objet n'est pas définie à une instance d'un objet.'
+
+System.Windows.Forms.DataGridViewCell.Value.get retournée null.
+can you fix them then explain to me clearly what is done
