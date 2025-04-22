@@ -119,7 +119,7 @@ namespace PSEU
             this.richTextBox1.Size = new System.Drawing.Size(350, 154);
             this.richTextBox1.TabIndex = 0;
             this.richTextBox1.Text = "Click here to start";
-            this.richTextBox1.Click += new System.EventHandler(this.richTextBox1_Click);
+            this.richTextBox1.Click += new System.EventHandler(this.Display_Log_Files);
             // 
             // tableLayoutPanel2
             // 
