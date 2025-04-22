@@ -214,7 +214,7 @@ namespace PSEU
             this.tabControl1.SelectedIndex = 0;
             this.tabControl1.Size = new System.Drawing.Size(760, 525);
             this.tabControl1.TabIndex = 0;
-            this.tabControl1.KeyUp += new System.Windows.Forms.KeyEventHandler(this.tabControl1_KeyUp);
+            this.tabControl1.KeyUp += new System.Windows.Forms.KeyEventHandler(this.Control_Panel_KeyUp);
             // 
             // tabPage2
             // 
@@ -336,7 +336,7 @@ namespace PSEU
             this.button7.TabIndex = 14;
             this.button7.Text = "Inputs";
             this.button7.UseVisualStyleBackColor = true;
-            this.button7.Click += new System.EventHandler(this.button7_Click);
+            this.button7.Click += new System.EventHandler(this.Input_button);
             // 
             // button6
             // 
@@ -349,7 +349,7 @@ namespace PSEU
             this.button6.TabIndex = 13;
             this.button6.Text = "Sensors";
             this.button6.UseVisualStyleBackColor = true;
-            this.button6.Click += new System.EventHandler(this.button6_Click);
+            this.button6.Click += new System.EventHandler(this.Sensor_button);
             // 
             // button5
             // 
@@ -362,7 +362,7 @@ namespace PSEU
             this.button5.TabIndex = 10;
             this.button5.Text = "Load";
             this.button5.UseVisualStyleBackColor = true;
-            this.button5.Click += new System.EventHandler(this.button5_Click);
+            this.button5.Click += new System.EventHandler(this.Load_button);
             // 
             // label1
             // 
@@ -461,7 +461,7 @@ namespace PSEU
             this.dataGridView5.ShowCellErrors = false;
             this.dataGridView5.Size = new System.Drawing.Size(739, 49);
             this.dataGridView5.TabIndex = 0;
-            this.dataGridView5.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridView5_CellClick);
+            this.dataGridView5.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.Control_Panel_Force_Sensors);
             // 
             // dataGridViewTextBoxColumn49
             // 
@@ -560,8 +560,8 @@ namespace PSEU
             this.panel7.Name = "panel7";
             this.panel7.Size = new System.Drawing.Size(739, 44);
             this.panel7.TabIndex = 2;
-            this.panel7.SizeChanged += new System.EventHandler(this.panel7_SizeChanged);
-            this.panel7.Layout += new System.Windows.Forms.LayoutEventHandler(this.panel7_Layout);
+            this.panel7.SizeChanged += new System.EventHandler(this.Panel7_SizeChanged);
+            this.panel7.Layout += new System.Windows.Forms.LayoutEventHandler(this.Panel7_Layout);
             // 
             // dataGridView6
             // 
@@ -608,7 +608,7 @@ namespace PSEU
             this.dataGridView6.ShowCellErrors = false;
             this.dataGridView6.Size = new System.Drawing.Size(739, 44);
             this.dataGridView6.TabIndex = 0;
-            this.dataGridView6.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridView6_CellClick);
+            this.dataGridView6.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.Control_Panel_Force_Input);
             // 
             // dataGridViewTextBoxColumn65
             // 
@@ -777,7 +777,7 @@ namespace PSEU
             this.dataGridView4.ShowCellErrors = false;
             this.dataGridView4.Size = new System.Drawing.Size(739, 69);
             this.dataGridView4.TabIndex = 0;
-            this.dataGridView4.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridView4_CellClick);
+            this.dataGridView4.CellClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.Control_Panel_Force_Load);
             // 
             // dataGridViewTextBoxColumn33
             // 
@@ -885,7 +885,7 @@ namespace PSEU
             this.button4.TabIndex = 8;
             this.button4.Text = "Auto";
             this.button4.UseVisualStyleBackColor = true;
-            this.button4.Click += new System.EventHandler(this.button4_Click);
+            this.button4.Click += new System.EventHandler(this.Auto_button);
             // 
             // button2
             // 
@@ -899,7 +899,7 @@ namespace PSEU
             this.button2.TabIndex = 6;
             this.button2.Text = "Apply (F9)";
             this.button2.UseVisualStyleBackColor = true;
-            this.button2.Click += new System.EventHandler(this.button2_Click);
+            this.button2.Click += new System.EventHandler(this.Apply_button);
             // 
             // button3
             // 
@@ -912,7 +912,7 @@ namespace PSEU
             this.button3.TabIndex = 7;
             this.button3.Text = "Reset (F3)";
             this.button3.UseVisualStyleBackColor = true;
-            this.button3.Click += new System.EventHandler(this.button3_Click);
+            this.button3.Click += new System.EventHandler(this.Reset_button);
             // 
             // tableLayoutPanel1
             // 
@@ -1339,7 +1339,7 @@ namespace PSEU
             this.dataGridView1.ShowCellErrors = false;
             this.dataGridView1.Size = new System.Drawing.Size(739, 25);
             this.dataGridView1.TabIndex = 0;
-            this.dataGridView1.CellContentClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridView1_CellContentClick);
+            this.dataGridView1.CellContentClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.Control_Panel_Supply);
             // 
             // Column1
             // 
@@ -1443,7 +1443,7 @@ namespace PSEU
             this.dataGridView7.RowHeadersVisible = false;
             this.dataGridView7.Size = new System.Drawing.Size(730, 105);
             this.dataGridView7.TabIndex = 0;
-            this.dataGridView7.CellEnter += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridView7_CellEnter);
+            this.dataGridView7.CellEnter += new System.Windows.Forms.DataGridViewCellEventHandler(this.Control_Panel_Log_Files);
             // 
             // Column5
             // 
@@ -1485,7 +1485,7 @@ namespace PSEU
             this.button1.TabIndex = 0;
             this.button1.Text = "Refresh";
             this.button1.UseVisualStyleBackColor = true;
-            this.button1.Click += new System.EventHandler(this.button1_Click_1);
+            this.button1.Click += new System.EventHandler(this.Refresh_button);
             // 
             // statusStrip1
             // 
@@ -1502,7 +1502,7 @@ namespace PSEU
             this.toolStripStatusLabel1.Name = "toolStripStatusLabel1";
             this.toolStripStatusLabel1.Size = new System.Drawing.Size(118, 17);
             this.toolStripStatusLabel1.Text = "toolStripStatusLabel1";
-            this.toolStripStatusLabel1.Click += new System.EventHandler(this.toolStripStatusLabel1_Click);
+            this.toolStripStatusLabel1.Click += new System.EventHandler(this.ToolStripStatusLabel1_Click);
             // 
             // groupBox9
             // 
