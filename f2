@@ -24,13 +24,13 @@ namespace PSEU
             toolStripStatusLabel1.Text = "Ready";
         }
 
-        private void openFileDialog1_FileOk(object sender, CancelEventArgs e)
+        private void OpenFileDialog1_FileOk(object sender, CancelEventArgs e)
         {
 
         }
 
         /*Click sur le bouton "Search..."*/
-        private void button3_Click(object sender, EventArgs e)
+        private void Reset_button(object sender, EventArgs e)
         {
             string link;
             //string file_error = "";
@@ -52,9 +52,9 @@ namespace PSEU
 
                 glob_nbr_line = 0;
 
-                /*Si verify_atp(link) retourne -1, tout s'est bien passé*/
+                /*Si Verify_Atp(link) retourne -1, tout s'est bien passé*/
 
-                if (verify_atp(link))
+                if (Verify_Atp(link))
                 {
                     groupBox2.Enabled = true;
                     toolStripStatusLabel1.Text = "ATP files successfully checked !";
@@ -68,7 +68,7 @@ namespace PSEU
             Directory.SetCurrentDirectory(".."); //Une fois fini, on remonte dans le répertoire parent
         }
 
-        private bool verify_atp(string link)
+        private bool Verify_Atp(string link)
         {
             /*Vérification que le fichier appelé est bien présent dans le dossier ATP*/
             StringBuilder builder = new StringBuilder();
@@ -99,7 +99,7 @@ namespace PSEU
             int value;
             string exec_com;
 
-            for (int i = 0; i < nbr_lines; i = i + 1)
+            for (int i = 0; i < nbr_lines; i += 1)
             {
                 /*Switch - case sur le premier caractère de la commande*/
                 switch (str[i][0])
@@ -200,13 +200,13 @@ namespace PSEU
                                     if (str[i].Length >= 5)
                                     {
                                         exec_com = "";
-                                        for (int j = 3; str[i][j] != '\r'; j = j + 1)
+                                        for (int j = 3; str[i][j] != '\r'; j += 1)
                                         {
                                             exec_com += str[i][j];
                                         }
                                         exec_com += ".ATP";
 
-                                        if (verify_atp(exec_com) == true)
+                                        if (Verify_Atp(exec_com) == true)
                                         {
                                             break;
                                         }
@@ -239,7 +239,7 @@ namespace PSEU
                                     if (str[i].Length >= 5)
                                     {
                                         exec_com = "";
-                                        for (int j = 3; str[i][j] != '\r'; j = j + 1)
+                                        for (int j = 3; str[i][j] != '\r'; j += 1)
                                         {
                                             exec_com += str[i][j];
                                         }
@@ -286,7 +286,7 @@ namespace PSEU
         }
 
         /*Fonction qui vérifie que le nom du dernier log est bien conforme*/
-        private string check_log_file()
+        private string Check_Log_File()
         {
             string[] files_dir;
             string filename;
@@ -312,48 +312,48 @@ namespace PSEU
         }
 
         /*Méthode publique qui permet de récupérer dans la fenêtre parent la source du fichier apt ouvert*/
-        public string return_link()
+        public string Return_Link()
         {
             return textBox1.Text.Split('\\')[textBox1.Text.Split('\\').Length - 1];;
         }
 
         /*Méthode publique qui permet de récupérer dans la fenêtre parent si l'utilisateur veut un log*/
-        public bool return_logYN()
+        public bool Return_LogYN()
         {
             return radioButton1.Checked;
         }
 
         /*Méthode publique qui permet de récupérer dans la fenêtre parent le nom de l'utilisateur*/
-        public string return_user_name()
+        public string Return_User_Name()
         {
             return textBox2.Text.ToString();
         }
 
         /*Méthode publique qui permet de récupérer dans la fenêtre parent le numéro de série*/
-        public string return_SN()
+        public string Return_SN()
         {
             return textBox3.Text.ToString();
         }
 
         /*Méthode publique qui permet de récupérer dans la fenêtre parent les commentaires utilisateur*/
-        public string return_comments()
+        public string Return_Comments()
         {
             return richTextBox1.Text.ToString();
         }
 
         /*Méthode publique qui permet de récupérer dans la fenêtre parent le nombre de lignes globales du fichier*/
-        public double return_glob_nbr_line()
+        public double Return_Glob_Nbr_Line()
         {
             return glob_nbr_line;
         }
 
         /*Click sur le bouton "Yes" pr la création du log*/
-        private void radioButton1_MouseUp(object sender, MouseEventArgs e)
+        private void Automatic_Mode_Yes_RadioButton(object sender, MouseEventArgs e)
         {
             string return_check;
             string err_mess;
 
-            return_check = check_log_file();
+            return_check = Check_Log_File();
             if (return_check == "")
             {
                 groupBox3.Enabled = true;
@@ -368,7 +368,7 @@ namespace PSEU
         }
 
         /*Click sur le bouton "No" pr la création du log*/
-        private void radioButton2_MouseUp(object sender, MouseEventArgs e)
+        private void Automatic_Mode_No_RadioButton(object sender, MouseEventArgs e)
         {
             textBox2.Text = "";
             groupBox3.Enabled = false;
@@ -397,7 +397,7 @@ namespace PSEU
         /*Appuie sur le bouton validate*/
         private void button1_Click(object sender, EventArgs e)
         {
-            /*Form3 DispCommands = new Form3(return_link(), return_logYN(), return_user_name(), return_SN(), return_comments());
+            /*Form3 DispCommands = new Form3(Return_Link(), Return_LogYN(), Return_User_Name(), Return_SN(), Return_Comments());
             DispCommands.TopMost = true; //Fenêtre toujours au premier plan
             DispCommands.Show();*/
         }
