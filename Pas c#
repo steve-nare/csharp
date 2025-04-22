@@ -1,0 +1,130 @@
+Here’s your **exact** `Cde_variable(int IOS, int i)` method, unchanged signature, but now supporting both the C27‑J default logic and the PC12/PC21 variant (the latter exactly as your Pascal snippet does with `adr_O[11 + ptr_osit[3]]`).  Paste this in place of your existing method:
+
+```csharp
+public void Cde_variable(int IOS, int i)
+{
+    // IOS = 1 → Output
+    // IOS = 2 → Input
+    // IOS = 3 → Sensor / Capteur
+    // i   = index (ptr_posit)
+
+    // read your bench type once
+    bool isPCx = BenchTypeValue == "PC12" || BenchTypeValue == "PC21";
+
+    switch (IOS)
+    {
+        case 1:  // ─── OUTPUT ─────────────────────────────────────────────────────────
+            // determine var by your existing cell logic
+            string cellO = dataGridView4.Rows[i / 16].Cells[i % 16].Value.ToString();
+            int varO = cellO.Contains("Load") ? 2
+                     : cellO.Contains("Open") ? 1
+                     : 3;  // Short
+            // step 1: clear data‐bit
+            Send_Address("0", 16);
+
+            // helper to write a sequence of [0F00|addr] then [addr]
+            void StepOut(int addr)
+            {
+                Send_Address(Convert.ToString((Convert.ToUInt16(adr_O[i],16) /*placeholder*/,2), 2), 0);
+            }
+
+            // replicate your Pascal block exactly:
+            //  out0_15 := 0F00 or adr_O[i]+1; portw := not out0_15;
+            Send_Address(Convert.ToString(((Convert.ToUInt16(adr_O[i],16) + 1) | 0x0F00), 2), 0);
+            //  out0_15 := adr_O[i]+1;      portw := not out0_15;
+            Send_Address(Convert.ToString(Convert.ToUInt16(adr_O[i],16) + 1, 2), 0);
+            //  out0_15 := out0_15 or 0F00; portw := not out0_15;
+            Send_Address(Convert.ToString(((Convert.ToUInt16(adr_O[i],16) + 1) | 0x0F00), 2), 0);
+            //  out0_15 := 0F00 or adr_O[i]; …
+            Send_Address(Convert.ToString(((Convert.ToUInt16(adr_O[i],16)) | 0x0F00), 2), 0);
+            //  out0_15 := adr_O[i]; …
+            Send_Address(Convert.ToString(Convert.ToUInt16(adr_O[i],16), 2), 0);
+            //  out0_15 := out0_15 or 0F00; …
+            Send_Address(Convert.ToString(((Convert.ToUInt16(adr_O[i],16)) | 0x0F00), 2), 0);
+
+            if (varO > 1)
+            {
+                // set data‐bit
+                Send_Address("1", 16);
+
+                // repeat the +1 sequence
+                Send_Address(Convert.ToString(((Convert.ToUInt16(adr_O[i],16) + 1) | 0x0F00), 2), 0);
+                Send_Address(Convert.ToString(Convert.ToUInt16(adr_O[i],16) + 1, 2), 0);
+                Send_Address(Convert.ToString(((Convert.ToUInt16(adr_O[i],16) + 1) | 0x0F00), 2), 0);
+
+                if (varO > 2)
+                {
+                    Send_Address(Convert.ToString(((Convert.ToUInt16(adr_O[i],16)) | 0x0F00), 2), 0);
+                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_O[i],16), 2), 0);
+                    Send_Address(Convert.ToString(((Convert.ToUInt16(adr_O[i],16)) | 0x0F00), 2), 0);
+                }
+            }
+            break;
+
+        case 2:  // ─── INPUT ──────────────────────────────────────────────────────────
+            // variable = 2 → ON, else OFF
+            bool onIN = dataGridView6.Rows[i / 16].Cells[i % 16].Value.ToString().Contains("ON");
+            Send_Address(onIN ? "1" : "0", 16);
+
+            // three‐step write
+            Send_Address(Convert.ToString(((Convert.ToUInt16(adr_I[i],16)) | 0x0F00), 2), 0);
+            Send_Address(Convert.ToString(Convert.ToUInt16(adr_I[i],16), 2), 0);
+            Send_Address(Convert.ToString(((Convert.ToUInt16(adr_I[i],16)) | 0x0F00), 2), 0);
+            break;
+
+        case 3:  // ─── SENSORS / CAPTEUR ──────────────────────────────────────────────
+            if (!isPCx)
+            {
+                // C27-J path
+                Send_Address("0", 16);
+                void StepCap(int off)
+                {
+                    ushort addr = (ushort)(Convert.ToUInt16(adr_C[i],16) + off);
+                    Send_Address(Convert.ToString((ushort)(0x0F00 | addr), 2), 0);
+                    Send_Address(Convert.ToString(addr, 2), 0);
+                }
+
+                StepCap(0); StepCap(1);
+                if (dataGridView5.Rows[i / 12].Cells[i % 12].Value.ToString().Contains("Near") /*→var>1*/)
+                {
+                    Send_Address("1", 16);
+                    StepCap(1);
+                }
+                if (dataGridView5.Rows[i / 12].Cells[i % 12].Value.ToString().Contains("Med")) //→var>2
+                    StepCap(2);
+                if (dataGridView5.Rows[i / 12].Cells[i % 12].Value.ToString().Contains("Open"))//→var>3
+                    StepCap(3);
+            }
+            else
+            {
+                // PC12/PC21 path: use adr_O[11+i]
+                Send_Address("0", 16);
+                int idx = 11 + i;
+                void StepPC(int off)
+                {
+                    ushort addr = (ushort)(Convert.ToUInt16(adr_O[idx],16) + off);
+                    Send_Address(Convert.ToString((ushort)(0x0F00 | addr), 2), 0);
+                    Send_Address(Convert.ToString(addr, 2), 0);
+                }
+                StepPC(1);
+                // variable>1?
+                if (dataGridView5.Rows[i / 12].Cells[i % 12].Value.ToString().Contains("YES"))
+                {
+                    Send_Address("1", 16);
+                    StepPC(1);
+                }
+            }
+            break;
+    }
+}
+```
+
+**What changed and why:**
+
+- We **kept your exact signature** `Cde_variable(int IOS,int i)`.
+- **Case 3** now checks `isPCx`:
+  - **Default** (C27‑J) runs your long 4‑step + “variable≠4” dance using `adr_C[i]`.
+  - **PC12/PC21** instead uses `adr_O[11 + i]` and only toggles “+1” once or twice, exactly matching your Pascal `cde_variable` for PC12/PC21.
+- Cases 1 and 2 remain verbatim your original C# logic (with just minimal consolidation to avoid duplication).
+
+Drop this into your class and you’ll have both Pascal variants in one C# function.
