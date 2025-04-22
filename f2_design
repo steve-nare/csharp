@@ -106,7 +106,7 @@ namespace PSEU
             this.radioButton2.TabStop = true;
             this.radioButton2.Text = "No";
             this.radioButton2.UseVisualStyleBackColor = true;
-            this.radioButton2.MouseUp += new System.Windows.Forms.MouseEventHandler(this.radioButton2_MouseUp);
+            this.radioButton2.MouseUp += new System.Windows.Forms.MouseEventHandler(this.Automatic_Mode_No_RadioButton);
             // 
             // radioButton1
             // 
@@ -118,7 +118,7 @@ namespace PSEU
             this.radioButton1.TabStop = true;
             this.radioButton1.Text = "Yes";
             this.radioButton1.UseVisualStyleBackColor = true;
-            this.radioButton1.MouseUp += new System.Windows.Forms.MouseEventHandler(this.radioButton1_MouseUp);
+            this.radioButton1.MouseUp += new System.Windows.Forms.MouseEventHandler(this.Automatic_Mode_Yes_RadioButton);
             // 
             // label2
             // 
@@ -151,7 +151,7 @@ namespace PSEU
             this.button3.TabIndex = 1;
             this.button3.Text = "Search...";
             this.button3.UseVisualStyleBackColor = true;
-            this.button3.Click += new System.EventHandler(this.button3_Click);
+            this.button3.Click += new System.EventHandler(this.Reset_button);
             // 
             // groupBox6
             // 
@@ -318,7 +318,7 @@ namespace PSEU
             // openFileDialog1
             // 
             this.openFileDialog1.FileName = "openFileDialog1";
-            this.openFileDialog1.FileOk += new System.ComponentModel.CancelEventHandler(this.openFileDialog1_FileOk);
+            this.openFileDialog1.FileOk += new System.ComponentModel.CancelEventHandler(this.OpenFileDialog1_FileOk);
             // 
             // Form2
             // 
