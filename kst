@@ -1,5 +1,5 @@
-i have an issue when i click the No on Force LLS when the benchtype is pc12 or PC21 
-the value does not change it stay to NO can you fix it 
+base on form1 code when i choose PC12 or PC21 then change the force sensor value from NO to Yes then press  Apply_button 
+i get this error System.FormatException : 'Le format de la chaîne d'entrée est incorrect.' line 245 can you fix it
 
 using System;
 using System.Collections.Generic;
@@ -652,11 +652,10 @@ namespace PSEU
 
             if (BenchTypeValue == "PC12" || BenchTypeValue == "PC21")
             {
-                // only NO ↔ YES
-                if (txt.EndsWith("NO   "))
-                    cell.Value = txt.Replace("NO   ", "YES  ");
+                if (txt.EndsWith("NO"))
+                    cell.Value = txt.Replace("NO", "YES");
                 else
-                    cell.Value = txt.Replace("YES  ", "NO   ");
+                    cell.Value = txt.Replace("YES", "NO");
             }
             else
             {
