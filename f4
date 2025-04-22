@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace PSEU
 {
@@ -14,9 +15,7 @@ namespace PSEU
         public Form4()
         {
             InitializeComponent();
-            BenchType.Items.Add("PC12");
-            BenchType.Items.Add("PC21");
-            BenchType.Items.Add("C-27J");
+            BenchType.Items.AddRange(new string[] { "PC12", "PC21", "C27-J" });
             StartButton.Click += StartButton_Click;
         }
 
@@ -29,16 +28,30 @@ namespace PSEU
         {
             if (BenchType.SelectedItem != null && Application.OpenForms["Form1"] == null)
             {
-                Form1 form1 = new Form1();
+                string selectedBenchType = BenchType.SelectedItem.ToString() ?? "Default";
+                Form1 form1 = new Form1(selectedBenchType);
+                form1.FormClosed += Form1_FormClosed;
                 form1.Show();
             }
             else if (BenchType.SelectedItem == null)
             {
-                Label notSupportedLabel = new Label();
-                notSupportedLabel.Text = "Not supported BenchType";
-                notSupportedLabel.Location = new Point(10, 10); // Adjust location as needed
-                this.Controls.Add(notSupportedLabel);
+                MessageBox.Show("Please select an item from the ComboBox.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
+            /*
+            if (BenchType.SelectedItem == null)
+            {
+                MessageBox.Show("Please select an item from the ComboBox.", "Selection Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            string selectedValue = BenchType.SelectedItem.ToString() ?? "Default";
+            Form1 form1 = new Form1(selectedValue);
+            form1.Show();*/
+        }
+
+        private void Form1_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            this.Show();
         }
 
         private void label4_Click(object sender, EventArgs e)
