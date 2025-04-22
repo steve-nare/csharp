@@ -1,0 +1,81 @@
+The crash you’re seeing on PC12 is happening because, everywhere you check  
+
+```csharp
+if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+    ctrl_input = 12;
+else
+    ctrl_input = 18;
+```
+
+you’re reading the **property** `BenchTypeValue` – but you never actually set it in your constructor.  Your constructor’s parameter  
+```csharp
+public Form1(string BenchTypeValue) { … }
+```  
+shadows the property of the same name, so `this.BenchTypeValue` remains `null`.  That means **all** of your “if PC12/PC21” branches fall through to the `else`‑side, you end up using `ctrl_input = 18`, but you only seeded 12 cells in the grid… so as soon as your code does  
+```csharp
+for (int i = 0; i < ctrl_input; i++)
+    dataGridView2.Rows[i/16].Cells[i%16]…
+```
+when `i` reaches 16 it does `Rows[1]` (out of bounds) and you get your exception.
+
+---
+
+### Fix: assign the constructor parameter to the property
+
+Just add one line at the very top of your constructor so that all of your init‑routines see the right bench type:
+
+```diff
+public Form1(string BenchTypeValue)
+{
++   // make sure the property is initialized before any Init_… or Color_… call
++   this.BenchTypeValue = BenchTypeValue ?? "Default";
+
+    // now the rest of your code still works off the property…
+    if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+    {
+        inpt  = new bool[12];
+        outp = new bool[11];
+    }
+    else
+    {
+        inpt  = new bool[18];
+        outp = new bool[48];
+    }
+
+    InitializeComponent();
+    this.FormClosing += Form1_FormClosing;
+
+    Init_Values(BenchTypeValue);
+    Init_Cells_Content(BenchTypeValue);
+    Color_Cells();
+
+    // …
+}
+```
+
+You can even rename your parameter to avoid the shadowing:
+
+```csharp
+public Form1(string benchType)
+{
+    this.BenchTypeValue = benchType ?? "Default";
+
+    bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+    inpt  = new bool[ isPCx ? 12 : 18 ];
+    outp = new bool[ isPCx ? 11 : 48 ];
+
+    InitializeComponent();
+    // … etc.
+}
+```
+
+---
+
+Once you do that, everywhere you do:
+
+```csharp
+if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+    ctrl_input = 12;
+```
+
+will actually hit the **true** branch for PC12, your loops will only go **0…11**, and you’ll never index `Rows[1]` (or any other `[>0]`) on a one‑row grid. That single line fixes the out‑of‑range on startup.
