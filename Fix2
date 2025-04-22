@@ -1,81 +1,90 @@
-The crash you’re seeing on PC12 is happening because, everywhere you check  
+Réflexion durant 16 secondes
 
-```csharp
-if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-    ctrl_input = 12;
-else
-    ctrl_input = 18;
-```
-
-you’re reading the **property** `BenchTypeValue` – but you never actually set it in your constructor.  Your constructor’s parameter  
-```csharp
-public Form1(string BenchTypeValue) { … }
-```  
-shadows the property of the same name, so `this.BenchTypeValue` remains `null`.  That means **all** of your “if PC12/PC21” branches fall through to the `else`‑side, you end up using `ctrl_input = 18`, but you only seeded 12 cells in the grid… so as soon as your code does  
-```csharp
-for (int i = 0; i < ctrl_input; i++)
-    dataGridView2.Rows[i/16].Cells[i%16]…
-```
-when `i` reaches 16 it does `Rows[1]` (out of bounds) and you get your exception.
+Here’s exactly what you need to change to turn your “FORCE SENSORS” pane into “FORCE LLS” on PC12/PC21, and limit its cell values to just “NO   ” ↔ “YES  ”:
 
 ---
 
-### Fix: assign the constructor parameter to the property
+1) **Make the GroupBox’s title dynamic**  
+   Right after `InitializeComponent()` in your constructor (or in `Form1_Load`), add:
 
-Just add one line at the very top of your constructor so that all of your init‑routines see the right bench type:
+   ```csharp
+   // after InitializeComponent();
+   if (BenchTypeValue == "PC12" || BenchTypeValue == "PC21")
+       groupBox6.Text = "FORCE LLS";
+   else
+       groupBox6.Text = "FORCE SENSORS";
+   ```
 
-```diff
-public Form1(string BenchTypeValue)
-{
-+   // make sure the property is initialized before any Init_… or Color_… call
-+   this.BenchTypeValue = BenchTypeValue ?? "Default";
+2) **Seed the grid with “NO   ” when you initialize**  
+   Replace your existing `Init_F_SENSORS_Cells()` entirely with this:
 
-    // now the rest of your code still works off the property…
-    if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-    {
-        inpt  = new bool[12];
-        outp = new bool[11];
-    }
-    else
-    {
-        inpt  = new bool[18];
-        outp = new bool[48];
-    }
+   ```csharp
+   public void Init_F_SENSORS_Cells()
+   {
+       UInt16 force_sensor = 24;               // total number of sensors
+       int cols = dataGridView5.ColumnCount;
+       int neededRows = (force_sensor + cols - 1) / cols;
+       dataGridView5.Rows.Clear();
+       for (int r = 0; r < neededRows; r++)
+           dataGridView5.Rows.Add();
 
-    InitializeComponent();
-    this.FormClosing += Form1_FormClosing;
+       for (int i = 0; i < force_sensor; i++)
+       {
+           string prefix = (i < 9) ? "0" : "";
+           if (BenchTypeValue == "PC12" || BenchTypeValue == "PC21")
+           {
+               // only NO or YES
+               dataGridView5.Rows[i / cols].Cells[i % cols].Value =
+                   $"{prefix}{i+1}:NO   ";
+           }
+           else
+           {
+               // original 5‑state labels
+               dataGridView5.Rows[i / cols].Cells[i % cols].Value =
+                   $"S{prefix}{i+1}:Far";
+           }
+           dataGridView5.Rows[i / cols].Cells[i % cols].Style.BackColor = Color.White;
+       }
+   }
+   ```
 
-    Init_Values(BenchTypeValue);
-    Init_Cells_Content(BenchTypeValue);
-    Color_Cells();
+3) **Toggle only NO ↔ YES**  
+   Update your `Control_Panel_Force_Sensors` handler to discriminate PC12/PC21:
 
-    // …
-}
-```
+   ```csharp
+   private void Control_Panel_Force_Sensors(object sender, DataGridViewCellEventArgs e)
+   {
+       var cell = dataGridView5.CurrentCell;
+       if (cell == null) return;
 
-You can even rename your parameter to avoid the shadowing:
+       string txt = cell.Value?.ToString() ?? "";
 
-```csharp
-public Form1(string benchType)
-{
-    this.BenchTypeValue = benchType ?? "Default";
+       if (BenchTypeValue == "PC12" || BenchTypeValue == "PC21")
+       {
+           // only NO ↔ YES
+           if (txt.EndsWith("NO   "))
+               cell.Value = txt.Replace("NO   ", "YES  ");
+           else
+               cell.Value = txt.Replace("YES  ", "NO   ");
+       }
+       else
+       {
+           // your old 5‑state cycle
+           if (txt.Contains("Far"))   cell.Value = txt.Replace("Far",  "Near");
+           else if (txt.Contains("Near"))  cell.Value = txt.Replace("Near", "Med");
+           else if (txt.Contains("Med"))   cell.Value = txt.Replace("Med",  "Open");
+           else if (txt.Contains("Open"))  cell.Value = txt.Replace("Open", "Short");
+           else                            cell.Value = txt.Replace("Short","Far");
+       }
 
-    bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
-    inpt  = new bool[ isPCx ? 12 : 18 ];
-    outp = new bool[ isPCx ? 11 : 48 ];
+       dataGridView5.DefaultCellStyle.SelectionBackColor = Color.Yellow;
+       cell.Style.BackColor               = Color.Yellow;
+       button2.Enabled                    = true;
+   }
+   ```
 
-    InitializeComponent();
-    // … etc.
-}
-```
+That’s it!  
 
----
-
-Once you do that, everywhere you do:
-
-```csharp
-if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-    ctrl_input = 12;
-```
-
-will actually hit the **true** branch for PC12, your loops will only go **0…11**, and you’ll never index `Rows[1]` (or any other `[>0]`) on a one‑row grid. That single line fixes the out‑of‑range on startup.
+1. **`groupBox6.Text`** now becomes “FORCE LLS” for PC12/PC21, otherwise it stays “FORCE SENSORS.”  
+2. **`Init_F_SENSORS_Cells`** seeds 24 rows of either `XX:NO   ` (for LLS benches) or `SXX:Far` (for others).  
+3. **`Control_Panel_Force_Sensors`** toggles between “NO   ” ↔ “YES  ” on those benches, and falls back to your 5‑state cycle for the rest.
