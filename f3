@@ -15,29 +15,29 @@ namespace PSEU
     public partial class Form3 : Form
     {
         /*Variables globales*/
-        string link;
-        bool logYN;
-        string username;
-        string SN;
-        string comments;
-        double glob_nbr_line;
+        readonly string link;
+        readonly bool logYN;
+        readonly string username;
+        readonly string SN;
+        readonly string comments;
+        readonly double glob_nbr_line;
         double current_progress = 0;
         int percent = 0;
         string log_content = "";
-        Form1 frm1;
-        Thread commands;
+        readonly Form1 frm1;
+        readonly Thread commands;
         bool cancel = false;
         bool fail = false;
         
-        Stopwatch sw = new Stopwatch();
+        readonly Stopwatch sw = new Stopwatch();
         long microseconds = 0;
 
         public Form3(string _link, bool _logYN, string _username, string _SN, string _comments, double _glob_nbr_line, Form1 _frm1)
         {
             InitializeComponent();
             this.Activate();
-            this.richTextBox1.LostFocus += new System.EventHandler(goTransparent);
-            this.richTextBox1.GotFocus += new System.EventHandler(goOpaque);
+            this.richTextBox1.LostFocus += new System.EventHandler(GoTransparent);
+            this.richTextBox1.GotFocus += new System.EventHandler(GoOpaque);
 
             /*Récupération des variables passées en paramètre à la Form3*/
             link = _link;
@@ -49,10 +49,10 @@ namespace PSEU
             frm1 = _frm1;
 
             /*Désactivation des contrôles de forçage*/
-            frm1.force_disable();
+            frm1.Force_disable();
 
-            /*Association de la méthode "start_commands" à appeler au début de ce Thread*/
-            commands = new Thread(new ThreadStart(begin_proc));
+            /*Association de la méthode "Start_Commands" à appeler au début de ce Thread*/
+            commands = new Thread(new ThreadStart(Begin_Process));
 
             /*Désactivation du contrôle inter-thread
              --> pas gênant ici car pas de risque de conflit entre les différents threads
@@ -62,43 +62,43 @@ namespace PSEU
             toolStripStatusLabel1.Text = "Ready";
         }
 
-        private void goTransparent(object sender, EventArgs e)
+        private void GoTransparent(object sender, EventArgs e)
         {
             //this.Opacity = 0.7;
             this.Opacity = 1;
             //this.richTextBox1.BackColor = Color.Silver;
         }
 
-        private void goOpaque(object sender, EventArgs e)
+        private void GoOpaque(object sender, EventArgs e)
         {
             this.Opacity = 1;
             this.richTextBox1.BackColor = Color.Black;
         }
 
         /*Click dans la richtextbox pour démarrer*/
-        private void richTextBox1_Click(object sender, EventArgs e)
+        private void Display_Log_Files(object sender, EventArgs e)
         {
             toolStripProgressBar1.Visible = true;  
             commands.Start();
         }
 
-        private void begin_proc()
+        private void Begin_Process()
         {
-            /*** Ici, pas de vérification quant aux fichiers car déjà fait dans la fonction "verify_atp" de Form2 ***/
+            /*** Ici, pas de vérification quant aux fichiers car déjà fait dans la fonction "Verify_Atp" de Form2 ***/
             string date_start = DateTime.Now.ToString();
             string date_stop;
             bool success;
 
             /*Initialisation du système avant tout envoit de commandes*/
-            //frm1.init_sys();
-            //frm1.cde_reset();
+            //frm1.Init_sys();
+            //frm1.Cde_reset();
 
             richTextBox1.Text = "";
             label1.Text = "";
             label2.Text = "";
 
             /*Désactivation du click de start au démarrage*/
-            richTextBox1.Click -= new System.EventHandler(this.richTextBox1_Click);
+            richTextBox1.Click -= new System.EventHandler(this.Display_Log_Files);
 
             /*Initilisation de la barre de progression*/
             toolStripProgressBar1.Minimum = 0;
@@ -108,10 +108,10 @@ namespace PSEU
             /*Lancement de la fonction qui va analyser les commandes*/
             toolStripStatusLabel1.Text = "Running ATP...";
             Directory.SetCurrentDirectory("./ATP");
-            success = start_commands(link);
+            success = Start_Commands(link);
             Directory.SetCurrentDirectory("..");
             
-            success = success & (!fail);
+            success &= (!fail);
             toolStripStatusLabel1.Text = "Test finished - ";
             if (success)
             {
@@ -130,11 +130,7 @@ namespace PSEU
             }
         }
 
-        private void end_proc()
-        {
-        }
-
-        private bool start_commands(string link)
+        private bool Start_Commands(string link)
         {
             StreamReader mainATPfile = new StreamReader(@link);
             string[] str = mainATPfile.ReadToEnd().Split('\n');
@@ -148,9 +144,9 @@ namespace PSEU
             int j; //Index de déplacement dans les lignes str[i]
             string exec_com;
 
-            for (int i = 0; i < nbr_lines; i = i + 1)
+            for (int i = 0; i < nbr_lines; i += 1)
             {
-                frm1.disp_feedback();
+                frm1.Display_feedback();
 
                 percent_current = (i * 100) / nbr_lines;
                 label1.Text = link + "  ";
@@ -211,7 +207,7 @@ namespace PSEU
                             if (value == 0)
                             {
                                 frm1.alim1 = false;
-                                frm1.send_address("1", 16 + 2);
+                                frm1.Send_Address("1", 16 + 2);
                                 //Thread.Sleep(10);
                                 //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
                                 sw.Reset(); sw.Start();
@@ -221,7 +217,7 @@ namespace PSEU
                             else if (value == 1)
                             {
                                 frm1.alim1 = true;
-                                frm1.send_address("0", 16 + 2);
+                                frm1.Send_Address("0", 16 + 2);
                                 //Thread.Sleep(10);
                                 //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
                                 sw.Reset(); sw.Start();
@@ -234,7 +230,7 @@ namespace PSEU
                             if (value == 0)
                             {
                                 frm1.alim2 = false;
-                                frm1.send_address("1", 16 + 3);
+                                frm1.Send_Address("1", 16 + 3);
                                 //Thread.Sleep(10);
                                 //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
                                 sw.Reset(); sw.Start();
@@ -244,7 +240,7 @@ namespace PSEU
                             else if (value == 1)
                             {
                                 frm1.alim2 = true;
-                                frm1.send_address("0", 16 + 3);
+                                frm1.Send_Address("0", 16 + 3);
                                 //Thread.Sleep(10);
                                 //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
                                 sw.Reset(); sw.Start();
@@ -254,7 +250,7 @@ namespace PSEU
                         }
                         
                         /*A METTRE ?*/
-                        //frm1.disp_force('p', num_IOS, value.ToString());
+                        //frm1.Disp_force('p', num_IOS, value.ToString());
 
                         break;
                     /*Positionnement des entrées discretes (I1 ... I18)*/
@@ -269,9 +265,9 @@ namespace PSEU
                             num_IOS = (str[i][1] - 48) * 10 + str[i][2] - 48;
                             value = str[i][4] - 48;
                         }
-                        //old_cell_i = frm1.disp_force('i', num_IOS, value.ToString(), old_cell_i);
-                        frm1.disp_force('i', num_IOS, value.ToString());
-                        frm1.cde_variable(2, num_IOS - 1);
+                        //old_cell_i = frm1.Disp_force('i', num_IOS, value.ToString(), old_cell_i);
+                        frm1.Disp_force('i', num_IOS, value.ToString());
+                        frm1.Cde_variable(2, num_IOS - 1);
 
                         break;
                     /*Positionnement des capteurs (S1 ... S24)*/
@@ -286,9 +282,9 @@ namespace PSEU
                             num_IOS = (str[i][1] - 48) * 10 + str[i][2] - 48;
                             value = str[i][4];
                         }
-                        //old_cell_s = frm1.disp_force('s', num_IOS, Convert.ToChar(value).ToString(), old_cell_s);
-                        frm1.disp_force('s', num_IOS, Convert.ToChar(value).ToString());
-                        frm1.cde_variable(3, num_IOS - 1); 
+                        //old_cell_s = frm1.Disp_force('s', num_IOS, Convert.ToChar(value).ToString(), old_cell_s);
+                        frm1.Disp_force('s', num_IOS, Convert.ToChar(value).ToString());
+                        frm1.Cde_variable(3, num_IOS - 1); 
 
                         break;
                     /*Positionnement des charges de sorties (O1 ... O46)*/
@@ -303,9 +299,9 @@ namespace PSEU
                             num_IOS = (str[i][1] - 48) * 10 + str[i][2] - 48;
                             value = str[i][4];
                         }
-                        //old_cell_o = frm1.disp_force('o', num_IOS, Convert.ToChar(value).ToString(), old_cell_o);
-                        frm1.disp_force('o', num_IOS, Convert.ToChar(value).ToString());
-                        frm1.cde_variable(1, num_IOS - 1); 
+                        //old_cell_o = frm1.Disp_force('o', num_IOS, Convert.ToChar(value).ToString(), old_cell_o);
+                        frm1.Disp_force('o', num_IOS, Convert.ToChar(value).ToString());
+                        frm1.Cde_variable(1, num_IOS - 1); 
 
                         break;
                     case '-':
@@ -314,7 +310,7 @@ namespace PSEU
                         {
                             /*Reset du banc de test*/
                             case 'r':
-                                frm1.cde_reset();
+                                frm1.Cde_reset();
                                 
                                 break;
                             /*Execute la liste de commande du fichier ATP\nom.atp*/
@@ -323,12 +319,12 @@ namespace PSEU
                                 while (str[i][j] != '\r')
                                 {
                                     exec_com += str[i][j];
-                                    j = j + 1;
+                                    j += 1;
                                 }
                                 exec_com += ".ATP";
 
                                 //Si un sous-fichier atp se termine mal, on ferme ceux ouvert au dessus
-                                if (start_commands(exec_com) == false)
+                                if (Start_Commands(exec_com) == false)
                                 {
                                     mainATPfile.Close();
                                     return false;
@@ -341,7 +337,7 @@ namespace PSEU
                                 while (str[i][j] != '\r')
                                 {
                                     exec_com += str[i][j];
-                                    j = j + 1;
+                                    j += 1;
                                 }
                                 label2.Text = exec_com;
 
@@ -355,7 +351,7 @@ namespace PSEU
                                 while (str[i][j] != '\r')
                                 {
                                     exec_com += str[i][j];
-                                    j = j + 1;
+                                    j += 1;
                                 }
                                 if (MessageBox.Show(exec_com, "Check", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
                                 {
@@ -369,7 +365,7 @@ namespace PSEU
                             /*Temporisation de xxx ms*/
                             case 'w':
                                 exec_com = "";
-                                for (j = 3; str[i][j] != '\r'; j = j + 1)
+                                for (j = 3; str[i][j] != '\r'; j += 1)
                                 {
                                     exec_com += str[i][j];
                                 }
@@ -428,7 +424,7 @@ namespace PSEU
                 }
             }
 
-            frm1.disp_feedback();
+            frm1.Display_feedback();
 
             /*Fermeture du fichier*/
             mainATPfile.Close();
@@ -454,7 +450,7 @@ namespace PSEU
             filename = filename.Remove(filename.Length - 4, 4);
            
             no_file = Convert.ToInt32(filename); //Pas de vérif que la conversion est possible car déjà fait dans Form2
-            no_file = no_file + 1;
+            no_file += 1;
             filename = no_file.ToString() + ".LOG";
 
             StreamWriter file = new StreamWriter(filename);
@@ -493,7 +489,7 @@ namespace PSEU
                     }
                     
                     /*Réactivation des contrôles de forçage manuels*/
-                    frm1.force_enable();
+                    frm1.Force_enable();
                     
                     if (frm1.board != null)
                     {
@@ -508,7 +504,7 @@ namespace PSEU
             else
             {
                 /*Réactivation des contrôles de forçage manuels*/
-                frm1.force_enable();
+                frm1.Force_enable();
                 
                 if (frm1.board != null)
                 {
@@ -539,13 +535,13 @@ namespace PSEU
                 address = Convert.ToInt16(adr_retour_I[i], 16) | Convert.ToInt16(mask, 16); //application du masque
                 address = (~address) & Convert.ToInt16("0FFF", 16); //Inversion car logique inverse + on masque le 1er nible du uint16
                 //frm1.board.Set32DigitalOutputsOn(0, (uint)address);
-                send_address(Convert.ToString(address, 2), 0);
+                Send_Address(Convert.ToString(address, 2), 0);
 
                 //PORT0 : Positionnement du banc à l'adresse voulue et "enable input" des demux
                 address = Convert.ToInt16(adr_retour_I[i], 16); //application du masque
                 address = (~address) & Convert.ToInt16("0FFF", 16); //Inversion car logique inverse + on masque le 1er nible du uint16
                 //frm1.board.Set32DigitalOutputsOn(0, (uint)address);
-                send_address(Convert.ToString(address, 2), 0);
+                Send_Address(Convert.ToString(address, 2), 0);
 
                 //PORT1 : Lecture du bit de donnée (LSB du PORT1)
                 frm1.board.Read1DigitalInput(32, ref data);
@@ -557,7 +553,7 @@ namespace PSEU
                 address = Convert.ToInt16(adr_retour_I[i], 16) | Convert.ToInt16(mask, 16); //application du masque
                 address = (~address) & Convert.ToInt16("0FFF", 16); //Inversion car logique inverse + on masque le 1er nible du uint16
                 //frm1.board.Set32DigitalOutputsOn(0, (uint)address);
-                send_address(Convert.ToString(address, 2), 0);
+                Send_Address(Convert.ToString(address, 2), 0);
             }
             byte data = 0;
             frm1.board.Read1DigitalInput(32, ref data);
