@@ -1,4 +1,4 @@
-where the code of the form1 update but when i start for PC12 i got this error System.IndexOutOfRangeException : 'L'index se trouve en dehors des limites du tableau.' can you fix it
+i have an issue that i want to fix on form1 FORCE SENSORS text for groupbox6 should be FORCE LLS for PC12and PC21 and the value can only use ('NO   ','YES  ') instead of ('Far  ','Near ','Med  ','Open ','Short') make sure to implement those modifications clearly base on the code
 
 using System;
 using System.Collections.Generic;
@@ -43,21 +43,15 @@ namespace PSEU
 
         public Form1(string BenchTypeValue)
         {
-            if(BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-            {
-                inpt = new bool[12];
-                outp = new bool[11];
-            }
-            else
-            {
-                inpt = new bool[18];
-                outp = new bool[48];
-            }
+            this.BenchTypeValue = BenchTypeValue ?? "Default"; // make sure to initialized values
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            inpt = new bool[isPCx ? 12 : 18];
+            outp = new bool[isPCx ? 11 : 48];
             InitializeComponent();
             this.FormClosing += Form1_FormClosing;
-            Init_Values(BenchTypeValue ?? "Default");
+            Init_Values(BenchTypeValue);
 
-            Init_Cells_Content(BenchTypeValue ?? "Default"); //Fonction qui initialise le contenu des dataGridView (onglet "Control")
+            Init_Cells_Content(BenchTypeValue); //Fonction qui initialise le contenu des dataGridView (onglet "Control")
             Color_Cells(); //Colotise les cellules en fonction de leur état (actif / inactif)
 
             timer_feedback.Tick += new EventHandler(Timer_tick); // Everytime timer ticks, Timer_tick will be called
