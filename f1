@@ -14,74 +14,83 @@ namespace PSEU
 {
     public partial class Form1 : Form
     {
+        // Define class-level fields as nullable
+        private string[] adr_retour_I;
+        private string[] adr_retour_O;
+        private string[] adr_I;
+        private string[] adr_O;
+        private string[] adr_C;
+
         //cl_ADDIDATAVirtualBoard AD_VirtualBoard;
         //int i_NbrInput;
         public PCI16XX_NET.PCI16XX board;
         private int ioNumber;
         Form3 DispCommands;
         Thread disp_fdbk;
-        
+        public string BenchTypeValue { get; set; }
+
         public bool alim1, alim2;
 
-        public bool[] inpt = new bool[18];
-        public bool[] outp = new bool[48];
+        public bool[] inpt, outp;
 
         //System.Threading.Timer timer500 = new System.Threading.Timer(test);
         public System.Windows.Forms.Timer timer_feedback = new System.Windows.Forms.Timer();
-        
-        Stopwatch sw = new Stopwatch();
+
+        readonly Stopwatch sw = new Stopwatch();
         long microseconds = 0;
-        
-        string[] adr_retour_I = {"0630","0637","0631","0638","0639","063A","063B",
-                                "063C","063D","063E","063F","0640","0641","0632",
-                                "0633","0634","0635","0636"};
 
-        string[] adr_retour_O = {"0600","0601","0608","0609","0610","0611","0618",
-                                "0619","0620","0621","0628","0629","0606","060E",
-                                "0604","060C","0614","061C","0602","0603","060A",
-                                "060B","0612","0613","061A","061B","0622","0623",
-                                "0607","0624","060F","062C","0616","061E","0627",
-                                "062F","0626","062E","0617","061F","062A","062B",
-                                "0625","062D","0605","060D","0615","061D"};
-
-        string[] adr_I = {"0340","0347","0341","0348","0349","034A","034B",
-                        "034C","034D","034E","034F","0350","0351","0342",
-                        "0343","0344","0345","0346"};
-
-        string[] adr_C = {"0560","0564","0578","057C","0310","0314","0328",
-                        "032C","0568","056C","0300","0304","0318","031C",
-                        "0330","0334","0570","0574","0308","030C","0320",
-                        "0324","0338","033C"};
-
-        string[] adr_O = {"0500","0502","0508","050A","0510","0512","0518",
-                        "051A","0520","0522","0528","052A","0534","053C",
-                        "0530","0538","0540","0548","0504","0506","050C",
-                        "050E","0514","0516","051C","051E","0524","0526",
-                        "0536","0550","053E","0558","0544","054C","0556",
-                        "055E","0554","055C","0546","054E","052C","052E",
-                        "0552","055A","0532","053A","0542","054A"};
-
-        public Form1()
+        public Form1(string BenchTypeValue)
         {
+            if(BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            {
+                inpt = new bool[12];
+                outp = new bool[11];
+            }
+            else
+            {
+                inpt = new bool[18];
+                outp = new bool[48];
+            }
             InitializeComponent();
-            Init_Cells_Content(); //Fonction qui initialise le contenu des dataGridView (onglet "Control")
-            color_cells(); //Colotise les cellules en fonction de leur état (actif / inactif)
 
-            timer_feedback.Tick += new EventHandler(timer_tick); // Everytime timer ticks, timer_Tick will be called
+            Init_Values(BenchTypeValue ?? "Default");
+
+            Init_Cells_Content(BenchTypeValue ?? "Default"); //Fonction qui initialise le contenu des dataGridView (onglet "Control")
+            Color_Cells(); //Colotise les cellules en fonction de leur état (actif / inactif)
+
+            timer_feedback.Tick += new EventHandler(Timer_tick); // Everytime timer ticks, Timer_tick will be called
             timer_feedback.Interval = 1000;                       // Timer will tick every X second
 
-            /*Association de la méthode "disp_feedback" à appeler au début de ce Thread*/
-            disp_fdbk = new Thread(new ThreadStart(disp_feedback));
+            /*Association de la méthode "Display_feedback" à appeler au début de ce Thread*/
+            disp_fdbk = new Thread(new ThreadStart(Display_feedback));
             //disp_fdbk = new Thread(new ThreadStart(test));
+
+            
         }
 
-        public void test()
+        private void Init_Values(string BenchTypeValue)
         {
+            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            {
+                adr_retour_I = new string[] { "0641", "0637", "0636", "0638", "0639", "063A", "063B", "063C", "063D", "063E", "063F", "0640" };
+                adr_retour_O = new string[] { "0602", "0603", "060A", "060B", "0612", "0613", "061A", "061B", "0622", "0623", "062A", "0600", "0601", "0608", "0609", "0610", "0611", "0618", "0619", "0620", "0621", "0628", "0629", "0606", "060E", "0604", "060C", "0614", "061C" };
+                adr_I = new string[] { "0351", "0347", "0346", "0348", "0349", "034A", "034B", "034C", "034D", "034E", "034F", "0350", "0340", "0342", "0343", "0344", "0345", "0341" };
+                adr_O = new string[] { "0504", "0506", "050C", "050E", "0514", "0516", "051C", "051E", "0524", "0526", "052C", "0500", "0502", "0508", "050A", "0510", "0512", "0518", "051A", "0520", "0522", "0528", "052A", "0556", "055E", "0530", "0538", "0540", "0548", "0536", "0550", "053E", "0558", "0544", "054C", "0556", "055E", "0554", "055C", "0546", "054E", "052E", "0552", "055A", "0532", "053A", "0542", "054A" };
+                adr_C = new string[] { "0560", "0564", "0578", "057C", "0310", "0314", "0328", "032C", "0568", "056C", "0300", "0304", "0318", "031C", "0330", "0334", "0570", "0574", "0308", "030C", "0320", "0324", "0338", "033C" };
+            }
+            else
+            {
+                adr_retour_I = new string[] { "0630", "0637", "0631", "0638", "0639", "063A", "063B", "063C", "063D", "063E", "063F", "0640", "0641", "0632", "0633", "0634", "0635", "0636" };
+                adr_retour_O = new string[] { "0600", "0601", "0608", "0609", "0610", "0611", "0618", "0619", "0620", "0621", "0628", "0629", "0606", "060E", "0604", "060C", "0614", "061C", "0602", "0603", "060A", "060B", "0612", "0613", "061A", "061B", "0622", "0623", "0607", "0624", "060F", "062C", "0616", "061E", "0627", "062F", "0626", "062E", "0617", "061F", "062A", "062B", "0625", "062D", "0605", "060D", "0615", "061D" };
+                adr_I = new string[] { "0340", "0347", "0341", "0348", "0349", "034A", "034B", "034C", "034D", "034E", "034F", "0350", "0351", "0342", "0343", "0344", "0345", "0346" };
+                adr_C = new string[] { "0560", "0564", "0578", "057C", "0310", "0314", "0328", "032C", "0568", "056C", "0300", "0304", "0318", "031C", "0330", "0334", "0570", "0574", "0308", "030C", "0320", "0324", "0338", "033C" };
+                adr_O = new string[] { "0500", "0502", "0508", "050A", "0510", "0512", "0518", "051A", "0520", "0522", "0528", "052A", "0534", "053C", "0530", "0538", "0540", "0548", "0504", "0506", "050C", "050E", "0514", "0516", "051C", "051E", "0524", "0526", "0536", "0550", "053E", "0558", "0544", "054C", "0556", "055E", "0554", "055C", "0546", "054E", "052C", "052E", "0552", "055A", "0532", "053A", "0542", "054A" };
+            }
         }
        
         private void Form1_Load(object sender, EventArgs e)
         {
-            int returnValue = 0;
+            int returnValue;
             ushort ioCount = 0;
 
             sw.Reset();
@@ -151,9 +160,9 @@ namespace PSEU
             this.board.SetPortConfiguration(1, 0x0);
 
             /*Initialisation du système*/
-            init_sys();
-            cde_reset();
-            disp_feedback(); //Initialise, entre autres, les tableaux outp et inpt
+            Init_sys();
+            Cde_reset();
+            Display_feedback(); //Initialise, entre autres, les tableaux outp et inpt
             
             if (this.board != null)
             {
@@ -161,25 +170,25 @@ namespace PSEU
             }
         }
 
-        public void init_sys()
+        public void Init_sys()
         {
-            send_address("0000111100000000", 0); //Initialisation des bits "d'adresse" et désactivation des 3 bits "d'enable" des décodeurs
-            send_address("00001100", 16); //Reset du système
+            Send_Address("0000111100000000", 0); //Initialisation des bits "d'adresse" et désactivation des 3 bits "d'enable" des décodeurs
+            Send_Address("00001100", 16); //Reset du système
         }
 
-        public void timer_tick(object sender, EventArgs e)
+        public void Timer_tick(object sender, EventArgs e)
         {
             if (disp_fdbk.IsAlive)
             {
                 disp_fdbk.Join(); //Si le thread est encore en marche, on attend sa fin
             }
-            disp_fdbk = new Thread(new ThreadStart(disp_feedback)); //Le thread étant terminé, on le réinitialise
+            disp_fdbk = new Thread(new ThreadStart(Display_feedback)); //Le thread étant terminé, on le réinitialise
             //disp_fdbk = new Thread(new ThreadStart(test));
             disp_fdbk.Start(); //Départ du thread qui va afficher les retours
         }
 
         /***** Appuie sur le bouton Apply *****/
-        private void button2_Click(object sender, EventArgs e)
+        private void Apply_button(object sender, EventArgs e)
         {
             string tosendlist = "";
             string[] send;
@@ -197,7 +206,7 @@ namespace PSEU
             }
 
             /*Récupération de force LOAD*/
-            for (int i = 0; i < 48; i = i + 1)
+            for (int i = 0; i < 48; i++)
             {
                 if (dataGridView4.Rows[i / 16].Cells[i % 16].Style.BackColor == System.Drawing.Color.Yellow)
                 {
@@ -208,7 +217,7 @@ namespace PSEU
             }
 
             /*Récupération de force SENSORS*/
-            for (int i = 0; i < 24; i = i + 1)
+            for (int i = 0; i < 24; i++)
             {
                 if (dataGridView5.Rows[i / 12].Cells[i % 12].Style.BackColor == System.Drawing.Color.Yellow)
                 {
@@ -219,7 +228,7 @@ namespace PSEU
             }
 
             /*Récupéraiton de force INPUT*/
-            for (int i = 0; i < 18; i = i + 1)
+            for (int i = 0; i < 18; i++)
             {
                 if (dataGridView6.Rows[i / 16].Cells[i % 16].Style.BackColor == System.Drawing.Color.Yellow)
                 {
@@ -231,22 +240,22 @@ namespace PSEU
 
             send = tosendlist.Split('\n');
             size = send.Length;
-            for (int i = 0; i < size - 1; i = i + 1)
+            for (int i = 0; i < size - 1; i++)
             {
                 IOS = send[i][0];
                 number = Convert.ToInt32(send[i][1].ToString() + send[i][2].ToString()) - 1; //-1 car tableau pars de 0
                 
                 if (IOS == 'O')
                 {
-                    cde_variable(1, number);
+                    Cde_variable(1, number);
                 }
                 else if (IOS == 'I')
                 {
-                    cde_variable(2, number);
+                    Cde_variable(2, number);
                 }
                 else if (IOS == 'S')
                 {
-                    cde_variable(3, number);
+                    Cde_variable(3, number);
                 }
                                 
                 /*IOS = send[i][0];
@@ -265,12 +274,12 @@ namespace PSEU
             sw.Reset(); sw.Start();
             microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
             while (microseconds < 10000) { microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L)); }
-            disp_feedback();
+            Display_feedback();
             timer_feedback.Enabled = true; //réactivation du timer d'affichage des retours en mode manuel
         }
 
         /*Appuie sur le bouton "Auto"*/
-        private void button4_Click(object sender, EventArgs e)
+        private void Auto_button(object sender, EventArgs e)
         {
             string link;
             bool logYN;
@@ -287,12 +296,12 @@ namespace PSEU
                 if (ConfAutoDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
                 {
                     /*Récupération de la saisie utilisateur (Form2)*/
-                    link = ConfAutoDialog.return_link();
-                    logYN = ConfAutoDialog.return_logYN();
-                    username = ConfAutoDialog.return_user_name();
-                    serialnumber = ConfAutoDialog.return_SN();
-                    comments = ConfAutoDialog.return_comments();
-                    glob_nbr_line = ConfAutoDialog.return_glob_nbr_line();
+                    link = ConfAutoDialog.Return_Link();
+                    logYN = ConfAutoDialog.Return_LogYN();
+                    username = ConfAutoDialog.Return_User_Name();
+                    serialnumber = ConfAutoDialog.Return_SN();
+                    comments = ConfAutoDialog.Return_Comments();
+                    glob_nbr_line = ConfAutoDialog.Return_Glob_Nbr_Line();
 
                     toolStripStatusLabel1.Text = "Automatic mode";
 
@@ -312,24 +321,37 @@ namespace PSEU
         }
 
         /*Fonction qui met à jour l'affichage des retours - affichage et envoie de commandes pour la lecture des I/O lecture*/
-        public void disp_feedback()
+        public void Display_feedback()
         {
             byte data = 0; //Données lue
             int toSend;
 
             Read_supply_status(); //Fonction qui va lire le status et mettre à jour l'affichage des alims
 
-            send_address("111", 8); //Désactivation des 3 bits d'enable des décodeurs
+            Send_Address("111", 8); //Désactivation des 3 bits d'enable des décodeurs
+
+            UInt16 ctrl_input, ctrl_output;
+
+            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            {
+                ctrl_input = 12;
+                ctrl_output = 11;
+            }
+            else
+            {
+                ctrl_input = 18;
+                ctrl_output = 48;
+            }
 
             /*Contrôle retour des entrées*/
-            for (int i = 0; i < 18; i++)
+            for (int i = 0; i < ctrl_input; i++)
             {
                 /*** adr_retour_I[i] ***/
                 //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                 toSend = Convert.ToUInt16(adr_retour_I[i], 16) | Convert.ToUInt16("0F00", 16);
-                send_address(Convert.ToString(toSend, 2), 0);
+                Send_Address(Convert.ToString(toSend, 2), 0);
                 //Envoie de l'adresse avec bit de sélection actif ('0')
-                send_address(Convert.ToString(Convert.ToUInt16(adr_retour_I[i], 16), 2), 0);
+                Send_Address(Convert.ToString(Convert.ToUInt16(adr_retour_I[i], 16), 2), 0);
                 //Thread.Sleep(10);
                 //attente de 10000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
                 sw.Reset(); sw.Start();
@@ -342,7 +364,7 @@ namespace PSEU
                 }   
                 //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                 toSend = Convert.ToUInt16(adr_retour_I[i], 16) | Convert.ToUInt16("0F00", 16);
-                send_address(Convert.ToString(toSend, 2), 0);
+                Send_Address(Convert.ToString(toSend, 2), 0);
 
                 if (!(Convert.ToBoolean(data)))
                 {
@@ -357,14 +379,14 @@ namespace PSEU
             }
             
             /*Contrôle retour des sorties*/
-            for (int i = 0; i < 48; i++)
+            for (int i = 0; i < ctrl_output; i++)
             {
                 /*** adr_retour_O[i] ***/
                 //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                 toSend = Convert.ToUInt16(adr_retour_O[i], 16) | Convert.ToUInt16("0F00", 16);
-                send_address(Convert.ToString(toSend, 2), 0);
+                Send_Address(Convert.ToString(toSend, 2), 0);
                 //Envoie de l'adresse avec bit de sélection actif ('0')
-                send_address(Convert.ToString(Convert.ToUInt16(adr_retour_O[i], 16), 2), 0);
+                Send_Address(Convert.ToString(Convert.ToUInt16(adr_retour_O[i], 16), 2), 0);
                 //Thread.Sleep(0); //REMPLACE LE i=i DE L'ANCIEN PROGRAMME
                 //attente de 1000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
                 sw.Reset(); sw.Start();
@@ -377,7 +399,7 @@ namespace PSEU
                 }   
                 //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                 toSend = Convert.ToUInt16(adr_retour_O[i], 16) | Convert.ToUInt16("0F00", 16);
-                send_address(Convert.ToString(toSend, 2), 0);
+                Send_Address(Convert.ToString(toSend, 2), 0);
 
                 if (!(Convert.ToBoolean(data)))
                 {
@@ -390,21 +412,20 @@ namespace PSEU
                     dataGridView3.Rows[i / 16].Cells[i % 16].Value = dataGridView3.Rows[i / 16].Cells[i % 16].Value.ToString().Replace(":0", ":1");
                 }
             }
-            color_cells();
+            Color_Cells();
         }
 
         /*Fonction qui met à jour les IOS de forçage - uniquement de l'affichage, pas d'envoie de commandes*/
-        public void disp_force(char IOS, int number, string value)
+        public void Disp_force(char IOS, int number, string value)
         {
-            int length, index;
+            int index;
             string cell;
 
-            number = number - 1;
+            number--;
 
             if (IOS == 'p')
             {
                 cell = dataGridView1.Rows[0].Cells[number].Value.ToString();
-                length = cell.Length;
                 index = cell.IndexOf(':');
                 cell = cell.Remove(index + 1, cell.Length - 1 - index) + value;
                 dataGridView1.Rows[0].Cells[number].Value = cell;
@@ -448,7 +469,6 @@ namespace PSEU
             {
                 case 'o':
                     cell = dataGridView4.Rows[number / 16].Cells[number % 16].Value.ToString();
-                    length = cell.Length;
                     index = cell.IndexOf(':');
                     cell = cell.Remove(index + 1, cell.Length - 1 - index) + value;
                     dataGridView4.Rows[number / 16].Cells[number % 16].Value = cell;
@@ -459,7 +479,6 @@ namespace PSEU
                     break;
                 case 's':
                     cell = dataGridView5.Rows[number / 12].Cells[number % 12].Value.ToString();
-                    length = cell.Length;
                     index = cell.IndexOf(':');
                     cell = cell.Remove(index + 1, cell.Length - 1 - index) + value;
                     dataGridView5.Rows[number / 12].Cells[number % 12].Value = cell;
@@ -470,7 +489,6 @@ namespace PSEU
                     break;
                 case 'i':
                     cell = dataGridView6.Rows[number / 16].Cells[number % 16].Value.ToString();
-                    length = cell.Length;
                     index = cell.IndexOf(':');
                     cell = cell.Remove(index + 1, cell.Length - 1 - index) + value;
                     dataGridView6.Rows[number / 16].Cells[number % 16].Value = cell;
@@ -485,7 +503,7 @@ namespace PSEU
         }
 
         /*Fonction qui désactive la sélection de forçage manuelle*/
-        public void force_disable()
+        public void Force_disable()
         {
             dataGridView4.Enabled = false;
             Init_F_LOAD_Cells();
@@ -506,7 +524,7 @@ namespace PSEU
         }
 
         /*Fonction qui active la sélection de forçage manuelle*/
-        public void force_enable()
+        public void Force_enable()
         {
             dataGridView4.Enabled = true;
             //Init_F_LOAD_Cells();
@@ -526,12 +544,12 @@ namespace PSEU
             button4.Enabled = true;
         }
 
-        private void toolStripStatusLabel1_Click(object sender, EventArgs e)
+        private void ToolStripStatusLabel1_Click(object sender, EventArgs e)
         {
             toolStripStatusLabel1.Text = "OK";
         }
 
-        private void dataGridView1_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        private void Control_Panel_Supply(object sender, DataGridViewCellEventArgs e)
         {
             if ((dataGridView1.CurrentCell.ColumnIndex == 2) || (dataGridView1.CurrentCell.ColumnIndex == 3))
             {
@@ -547,11 +565,11 @@ namespace PSEU
 
                     if (alim1)
                     {
-                        send_address("0", 16 + 2); //Activation alim1
+                        Send_Address("0", 16 + 2); //Activation alim1
                     }
                     else
                     {
-                        send_address("1", 16 + 2); //Désactivation alim1
+                        Send_Address("1", 16 + 2); //Désactivation alim1
                     }
 
                     //Thread.Sleep(10);
@@ -559,7 +577,7 @@ namespace PSEU
                     sw.Reset(); sw.Start();
                     microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
                     while (microseconds < 10000) { microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L)); }
-                    disp_feedback();
+                    Display_feedback();
                 }
                 else if (dataGridView1.CurrentCell.ColumnIndex == 3)
                 {
@@ -567,11 +585,11 @@ namespace PSEU
 
                     if (alim2)
                     {
-                        send_address("0", 16 + 3); //Activation alim2
+                        Send_Address("0", 16 + 3); //Activation alim2
                     }
                     else
                     {
-                        send_address("1", 16 + 3); //Désactivation alim2
+                        Send_Address("1", 16 + 3); //Désactivation alim2
                     }
 
                     //Thread.Sleep(10);
@@ -579,7 +597,7 @@ namespace PSEU
                     sw.Reset(); sw.Start();
                     microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
                     while (microseconds < 10000) { microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L)); }
-                    disp_feedback();
+                    Display_feedback();
                 }
 
                 timer_feedback.Enabled = true; //réactivation du timer d'affichage des retours en mode manuel
@@ -587,7 +605,7 @@ namespace PSEU
         }
 
         /*Sélection des états des forçage des sorties*/
-        private void dataGridView4_CellClick(object sender, DataGridViewCellEventArgs e)
+        private void Control_Panel_Force_Load(object sender, DataGridViewCellEventArgs e)
         {
             if (dataGridView4.CurrentCell.Value.ToString().Contains("Open"))
             {
@@ -607,7 +625,7 @@ namespace PSEU
         }
 
         /*Sélection des états des forçage des capteurs*/
-        private void dataGridView5_CellClick(object sender, DataGridViewCellEventArgs e)
+        private void Control_Panel_Force_Sensors(object sender, DataGridViewCellEventArgs e)
         {
             if (dataGridView5.CurrentCell.Value.ToString().Contains("Far"))
             {
@@ -635,7 +653,7 @@ namespace PSEU
         }
 
         /*Sélection des états des forçage des entrées*/
-        private void dataGridView6_CellClick(object sender, DataGridViewCellEventArgs e)
+        private void Control_Panel_Force_Input(object sender, DataGridViewCellEventArgs e)
         {
             if (dataGridView6.CurrentCell.FormattedValue.ToString() != "") //Condition qui permet de ne pas accéder au contenu des cellules vides
             {
@@ -658,7 +676,7 @@ namespace PSEU
         }
 
         /*(1/2) Evénement appelé lorsque qu'un élément de l'onglet "Control" est redimentionné*/
-        private void panel7_Layout(object sender, LayoutEventArgs e)
+        private void Panel7_Layout(object sender, LayoutEventArgs e)
         {
             /*Redimentionnement des polices des 6 tableaux présents dans l'onglet "control"*/
             if (tabControl1.Size.Width < 900)
@@ -753,7 +771,7 @@ namespace PSEU
         }
 
         /*(2/2) Evénement appelé lorsque qu'un élément de l'onglet "Control" est redimentionné*/
-        private void panel7_SizeChanged(object sender, EventArgs e)
+        private void Panel7_SizeChanged(object sender, EventArgs e)
         {
             foreach (DataGridViewColumn Col in dataGridView6.Columns)
             {
@@ -762,35 +780,36 @@ namespace PSEU
         }
 
         /*Evénement appelé quand on appuie sur une touche dans la fenêtre principale*/
-        private void tabControl1_KeyUp(object sender, KeyEventArgs e)
+        private void Control_Panel_KeyUp(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.F1)
             {
                 dataGridView1.CurrentCell = dataGridView1.Rows[0].Cells[2];
-                dataGridView1_CellContentClick(null, null); //Appel de commandes éxécutées lors d'un appuie sur le bouton d'alim1
+                Control_Panel_Supply(null, null); //Appel de commandes éxécutées lors d'un appuie sur le bouton d'alim1
             }
             else if (e.KeyCode == Keys.F2)
             {
                 dataGridView1.CurrentCell = dataGridView1.Rows[0].Cells[3];
-                dataGridView1_CellContentClick(null, null); //Appel de commandes éxécutées lors d'un appuie sur le bouton d'alim2
+                Control_Panel_Supply(null, null); //Appel de commandes éxécutées lors d'un appuie sur le bouton d'alim2
             }
             else if (e.KeyCode == Keys.F3)
             {
-                button3_Click(null, null); //Appel de commandes éxécutées lors d'un appuie sur le bouton reset
+                Reset_button(null, null); //Appel de commandes éxécutées lors d'un appuie sur le bouton reset
             }
             else if (e.KeyCode == Keys.F9)
             {
                 if (button2.Enabled)
                 {
-                    button2_Click(null, null); //Raccouci vers le bouton Apply
+                    Apply_button(null, null); //Raccouci vers le bouton Apply
                 }
             }
         }
 
         /*Fonction qui initialise le contenu des dataGridView (onglet "Control")*/
-        public void Init_Cells_Content()
+        public void Init_Cells_Content(string BenchTypeValue)
         {
-            string cells_content = "";
+            string cells_content;
+            UInt16 ctrl_input, ctrl_output;
             toolStripStatusLabel1.Text = "Ready";
 
             /*Contenu par défaut de "SUPPLY"*/
@@ -799,17 +818,27 @@ namespace PSEU
             dataGridView1.Rows[0].Cells[2].Value = "BENCH supply1:1 / OFF";
             dataGridView1.Rows[0].Cells[3].Value = "BENCH supply2:1 / OFF";
 
+            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            {
+                ctrl_input = 12;
+                ctrl_output = 11;
+            }
+            else
+            {
+                ctrl_input = 18;
+                ctrl_output = 48;
+            }
+
             /*Contenu par défaut de "CONTROL INPUT VOLTAGE"*/
-            cells_content = ""; //réinitilisation de la variable qui va porter le contenu de la cellule
             dataGridView2.Rows.Add(1);
-            for (int i = 0; i < 18; i = i + 1)
+            for (int i = 0; i < ctrl_input; i++)
             {
                 cells_content = "!I";
                 if (i < 9) //if qui sert à placer un "0" devant le numéro de l'E/S/C si < 10
                 {
-                    cells_content = cells_content + "0";
+                    cells_content += "0";
                 }
-                cells_content = cells_content + ((i + 1) + ":0");
+                cells_content += ((i + 1) + ":0");
                 dataGridView2.Rows[i / 16].Cells[i % 16].Value = cells_content;
             }
 
@@ -817,16 +846,15 @@ namespace PSEU
             dataGridView2.Rows[0].Cells[2].Value = " I03:0";
 
             /*Contenu par défaut de "CONTROL OUTPUT VOLTAGE"*/
-            cells_content = "";
             dataGridView3.Rows.Add(2);
-            for (int i = 0; i < 48; i = i + 1)
+            for (int i = 0; i < ctrl_output; i++)
             {
                 cells_content = "!O";
                 if (i < 9)
                 {
-                    cells_content = cells_content + "0";
+                    cells_content += "0";
                 }
-                cells_content = cells_content + ((i + 1) + ":0");
+                cells_content += ((i + 1) + ":0");
                 dataGridView3.Rows[i / 16].Cells[i % 16].Value = cells_content;
             }
 
@@ -845,16 +873,26 @@ namespace PSEU
 
         public void Init_F_LOAD_Cells()
         {
-            string cells_content = "";
+            string cells_content;
+            UInt16 load_force;
 
-            for (int i = 0; i < 48; i = i + 1)
+            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            {
+                load_force = 11;
+            }
+            else
+            {
+                load_force = 48;
+            }
+
+            for (int i = 0; i < load_force; i++)
             {
                 cells_content = "O";
                 if (i < 9)
                 {
-                    cells_content = cells_content + "0";
+                    cells_content += "0";
                 }
-                cells_content = cells_content + ((i + 1) + ":Load");
+                cells_content += ((i + 1) + ":Load");
                 dataGridView4.Rows[i / 16].Cells[i % 16].Value = cells_content;
 
                 dataGridView4.DefaultCellStyle.SelectionBackColor = Color.White;
@@ -864,16 +902,26 @@ namespace PSEU
 
         public void Init_F_SENSORS_Cells()
         {
-            string cells_content = "";
+            string cells_content;
+            UInt16 force_sensor;
 
-            for (int i = 0; i < 24; i = i + 1)
+            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            {
+                force_sensor = 24;
+            }
+            else
+            {
+                force_sensor = 24;
+            }
+
+            for (int i = 0; i < force_sensor; i++)
             {
                 cells_content = "S";
                 if (i < 9)
                 {
-                    cells_content = cells_content + "0";
+                    cells_content += "0";
                 }
-                cells_content = cells_content + ((i + 1) + ":Far");
+                cells_content += ((i + 1) + ":Far");
                 dataGridView5.Rows[i / 12].Cells[i % 12].Value = cells_content;
 
                 dataGridView5.DefaultCellStyle.SelectionBackColor = Color.White;
@@ -883,16 +931,26 @@ namespace PSEU
 
         public void Init_F_INPUT_Cells()
         {
-            string cells_content = "";
+            string cells_content;
+            UInt16 force_input;
 
-            for (int i = 0; i < 18; i = i + 1)
+            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            {
+                force_input = 12;
+            }
+            else
+            {
+                force_input = 18;
+            }
+
+            for (int i = 0; i < force_input; i++)
             {
                 cells_content = "I";
                 if (i < 9)
                 {
-                    cells_content = cells_content + "0";
+                    cells_content += "0";
                 }
-                cells_content = cells_content + ((i + 1) + ":OFF");
+                cells_content += ((i + 1) + ":OFF");
                 dataGridView6.Rows[i / 16].Cells[i % 16].Value = cells_content;
 
                 dataGridView6.DefaultCellStyle.SelectionBackColor = Color.White;
@@ -986,13 +1044,25 @@ namespace PSEU
         }
 
         /***** Fonction qui colorise les cellules retour des entrées et des sorties *****/
-        private void color_cells()
+        private void Color_Cells()
         {
             string cur_cont;
             int i;
+            UInt16 ctrl_input, ctrl_output;
+
+            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            {
+                ctrl_input = 12;
+                ctrl_output = 11;
+            }
+            else
+            {
+                ctrl_input = 18;
+                ctrl_output = 48;
+            }
 
             /*Entrées*/
-            for (i = 0; i < 18; i = i + 1)
+            for (i = 0; i < ctrl_input; i++)
             {
                 cur_cont = dataGridView2.Rows[i / 16].Cells[i % 16].Value.ToString();
                 if ((cur_cont.Contains("!") && cur_cont.EndsWith("0")) || ((!cur_cont.Contains("!")) && cur_cont.EndsWith("1")))
@@ -1008,7 +1078,7 @@ namespace PSEU
             dataGridView2.DefaultCellStyle.SelectionBackColor = dataGridView2.CurrentCell.Style.BackColor;
 
             /*Sorties*/
-            for (i = 0; i < 48; i = i + 1)
+            for (i = 0; i < ctrl_output; i++)
             {
                 cur_cont = dataGridView3.Rows[i / 16].Cells[i % 16].Value.ToString();
                 if ((cur_cont.Contains("!") && cur_cont.EndsWith("0")) || ((!cur_cont.Contains("!")) && cur_cont.EndsWith("1")))
@@ -1026,7 +1096,7 @@ namespace PSEU
         }
 
         /*Evénement appelé lors du clik sur le bouton reset Load*/
-        private void button5_Click(object sender, EventArgs e)
+        private void Load_button(object sender, EventArgs e)
         {
             DialogResult dialogResult = MessageBox.Show("FORCE LOAD - Are you sure to restore default values ?", "Default values", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (dialogResult == DialogResult.Yes)
@@ -1042,7 +1112,7 @@ namespace PSEU
                 /*Envoie des commandes de reset pour les sorties*/
                 for (int k = 0; k < 48; k++)
                 {
-                    cde_variable(1, k);
+                    Cde_variable(1, k);
                 }
 
                 timer_feedback.Enabled = true;
@@ -1050,7 +1120,7 @@ namespace PSEU
         }
 
         /*Evénement appelé lors du clik sur le bouton reset Sensors*/
-        private void button6_Click(object sender, EventArgs e)
+        private void Sensor_button(object sender, EventArgs e)
         {
             DialogResult dialogResult = MessageBox.Show("FORCE SENSORS - Are you sure to restore default values ?", "Default values", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (dialogResult == DialogResult.Yes)
@@ -1066,7 +1136,7 @@ namespace PSEU
                 /*Envoie des commandes de reset pour les capteurs*/
                 for (int k = 0; k < 24; k++)
                 {
-                    cde_variable(3, k);
+                    Cde_variable(3, k);
                 }
 
                 timer_feedback.Enabled = true;
@@ -1075,7 +1145,7 @@ namespace PSEU
         }
 
         /*Evénement appelé lors du clik sur le bouton reset Input*/
-        private void button7_Click(object sender, EventArgs e)
+        private void Input_button(object sender, EventArgs e)
         {
             DialogResult dialogResult = MessageBox.Show("FORCE INPUT - Are you sure to restore default values ?", "Default values", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (dialogResult == DialogResult.Yes)
@@ -1091,7 +1161,7 @@ namespace PSEU
                 /*Envoie des commandes de reset pour les entrées*/
                 for (int k = 0; k < 18; k++)
                 {
-                    cde_variable(2, k);
+                    Cde_variable(2, k);
                 }
 
                 timer_feedback.Enabled = true;
@@ -1100,7 +1170,7 @@ namespace PSEU
         }
 
         /*Appuie sur le bouton "Reset (F3)"*/
-        private void button3_Click(object sender, EventArgs e)
+        private void Reset_button(object sender, EventArgs e)
         {
             DialogResult dialogResult = MessageBox.Show("Are you sure to do a system reset ?", "Reset", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (dialogResult == DialogResult.Yes)
@@ -1114,7 +1184,7 @@ namespace PSEU
                 Init_F_LOAD_Cells();
                 Init_F_SENSORS_Cells();
                 Init_F_INPUT_Cells();
-                cde_reset();
+                Cde_reset();
 
                 Read_supply_status(); //Fonction qui va lire le status et mettre à jour l'affichage des alims
 
@@ -1123,7 +1193,7 @@ namespace PSEU
         }
 
         /*Onglet LOG - Click sur le bouton "refresh"*/
-        private void button1_Click_1(object sender, EventArgs e)
+        private void Refresh_button(object sender, EventArgs e)
         {
             bool dirExist = Directory.Exists(@"./LOG/");
             string[] filePaths;
@@ -1153,7 +1223,7 @@ namespace PSEU
                     foreach (string name in filePaths)
                     {
                         dataGridView7.Rows[i].Cells[0].Value = name;
-                        i = i + 1;
+                        i++;
                     }
                 }
                 else
@@ -1168,7 +1238,7 @@ namespace PSEU
         }
 
         /*Evénement produit lors d'un click sur une cellule du tableau LOG*/
-        private void dataGridView7_CellEnter(object sender, DataGridViewCellEventArgs e)
+        private void Control_Panel_Log_Files(object sender, DataGridViewCellEventArgs e)
         {
             if (dataGridView7.CurrentCell.Selected)
             {
@@ -1182,8 +1252,19 @@ namespace PSEU
             }
         }
         
-        public void cde_reset()
+        public void Cde_reset()
         {
+            UInt16 ctrl_input, ctrl_output;
+            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            {
+                ctrl_input = 12;
+                ctrl_output = 11;
+            }
+            else
+            {
+                ctrl_input = 18;
+                ctrl_output = 48;
+            }
             /*Remise à zéro de la fenêtre graphique*/
             Init_F_INPUT_Cells();
             Init_F_LOAD_Cells();
@@ -1193,13 +1274,13 @@ namespace PSEU
             alim2 = false;
 
             /*Envoie des commandes pour le reset au banc*/
-            send_address("1101", 16); //Offset de 16 pins pour arriver aux 4 pins : alim1, alim2, reset, data
+            Send_Address("1101", 16); //Offset de 16 pins pour arriver aux 4 pins : alim1, alim2, reset, data
             //attente de 5000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
             sw.Reset(); sw.Start();
             microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
             while (microseconds < 5000) {microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));}
 
-            send_address("1111", 16);
+            Send_Address("1111", 16);
             //attente de 5000 microsecondes (plus stable que la fonction Sleep() et DateTime.Now)
             sw.Reset(); sw.Start();
             microseconds = sw.ElapsedTicks / (Stopwatch.Frequency / (1000L * 1000L));
@@ -1208,26 +1289,26 @@ namespace PSEU
             
 
             /*Envoie des commandes de reset pour les sorties*/
-            for (int k = 0; k < 48; k++)
+            for (int k = 0; k < ctrl_output; k++)
             {
-                cde_variable(1, k);
+                Cde_variable(1, k);
             }
 
             /*Envoie des commandes de reset pour les entrées*/
-            for (int k = 0; k < 18; k++)
+            for (int k = 0; k < ctrl_input; k++)
             {
-                cde_variable(2, k);
+                Cde_variable(2, k);
             }
 
             /*Envoie des commandes de reset pour les capteurs*/
             for (int k = 0; k < 24; k++)
             {
-                cde_variable(3, k);
+                Cde_variable(3, k);
             }
         }
 
         /*Fonction qui prépare la donnée à envoyer en fonction des étant présents dans les dataGrid*/
-        public void cde_variable(int IOS, int i)
+        public void Cde_variable(int IOS, int i)
         {
             /* IOS = 1 --> Output **************************/
             /* IOS = 2 --> Input ***************************/
@@ -1265,57 +1346,57 @@ namespace PSEU
                         var = 3;
                     }
                                         
-                    send_address("0", 16); //Mise à 0 du bit data
+                    Send_Address("0", 16); //Mise à 0 du bit data
 
                     /*** adr_O[i] + 1 ***/
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = (Convert.ToUInt16(adr_O[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
                     //Envoie de l'adresse avec bit de sélection actif ('0')
-                    send_address(Convert.ToString(Convert.ToUInt16(adr_O[i], 16) + 1, 2), 0);
+                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_O[i], 16) + 1, 2), 0);
                     //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = (Convert.ToUInt16(adr_O[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
 
                     /*** adr_O[i] ***/
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = Convert.ToUInt16(adr_O[i], 16) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
                     //Envoie de l'adresse avec bit de sélection actif ('0')
-                    send_address(Convert.ToString(Convert.ToUInt16(adr_O[i], 16), 2), 0);
+                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_O[i], 16), 2), 0);
                     //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = Convert.ToUInt16(adr_O[i], 16) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
 
                     if (var > 1)
                     {
-                        send_address("1", 16); //Mise à 1 du bit data
+                        Send_Address("1", 16); //Mise à 1 du bit data
 
                         /*** adr_O[i] + 1 ***/
                         //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                         toSend = (Convert.ToUInt16(adr_O[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
-                        send_address(Convert.ToString(toSend, 2), 0);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
                         //Envoie de l'adresse avec bit de sélection actif ('0')
-                        send_address(Convert.ToString(Convert.ToUInt16(adr_O[i], 16) + 1, 2), 0);
+                        Send_Address(Convert.ToString(Convert.ToUInt16(adr_O[i], 16) + 1, 2), 0);
                         //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                         //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                         toSend = (Convert.ToUInt16(adr_O[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
-                        send_address(Convert.ToString(toSend, 2), 0);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
 
                         if (var > 2)
                         {
                             /*** adr_O[i] ***/
                             //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                             toSend = Convert.ToUInt16(adr_O[i], 16) | Convert.ToUInt16("0F00", 16);
-                            send_address(Convert.ToString(toSend, 2), 0);
+                            Send_Address(Convert.ToString(toSend, 2), 0);
                             //Envoie de l'adresse avec bit de sélection actif ('0')
-                            send_address(Convert.ToString(Convert.ToUInt16(adr_O[i], 16), 2), 0);
+                            Send_Address(Convert.ToString(Convert.ToUInt16(adr_O[i], 16), 2), 0);
                             //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                             //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                             toSend = Convert.ToUInt16(adr_O[i], 16) | Convert.ToUInt16("0F00", 16);
-                            send_address(Convert.ToString(toSend, 2), 0);
+                            Send_Address(Convert.ToString(toSend, 2), 0);
                         }
                     }
                     break;
@@ -1336,23 +1417,23 @@ namespace PSEU
                     //if (var == 2)
                     if (var == 2)
                     {
-                        send_address("1", 16); //Mise à 1 du bit data
+                        Send_Address("1", 16); //Mise à 1 du bit data
                     }
                     else
                     {
-                        send_address("0", 16); //Mise à 0 du bit data
+                        Send_Address("0", 16); //Mise à 0 du bit data
                     }
 
                     /*** adr_I[i] ***/
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = Convert.ToUInt16(adr_I[i], 16) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
                     //Envoie de l'adresse avec bit de sélection actif ('0')
-                    send_address(Convert.ToString(Convert.ToUInt16(adr_I[i], 16), 2), 0);
+                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_I[i], 16), 2), 0);
                     //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = Convert.ToUInt16(adr_I[i], 16) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0); 
+                    Send_Address(Convert.ToString(toSend, 2), 0); 
                     break;
 
                 /*Gestion capteurs*/
@@ -1390,84 +1471,84 @@ namespace PSEU
                         var = 5;
                     }
 
-                    send_address("0", 16); //Mise à 0 du bit data
+                    Send_Address("0", 16); //Mise à 0 du bit data
 
                     /*** adr_C[i] ***/
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = Convert.ToUInt16(adr_C[i], 16) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
                     //Envoie de l'adresse avec bit de sélection actif ('0')
-                    send_address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16), 2), 0);
+                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16), 2), 0);
                     //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = Convert.ToUInt16(adr_C[i], 16) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
 
                     /*** adr_C[i] + 1 ***/
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = (Convert.ToUInt16(adr_C[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
                     //Envoie de l'adresse avec bit de sélection actif ('0')
-                    send_address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 1, 2), 0);
+                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 1, 2), 0);
                     //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = (Convert.ToUInt16(adr_C[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
 
                     /*** adr_C[i] + 2 ***/
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = (Convert.ToUInt16(adr_C[i], 16) + 2) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
                     //Envoie de l'adresse avec bit de sélection actif ('0')
-                    send_address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 2, 2), 0);
+                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 2, 2), 0);
                     //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = (Convert.ToUInt16(adr_C[i], 16) + 2) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
 
                     /*** adr_C[i] + 3 ***/
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = (Convert.ToUInt16(adr_C[i], 16) + 3) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
                     //Envoie de l'adresse avec bit de sélection actif ('0')
-                    send_address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 3, 2), 0);
+                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 3, 2), 0);
                     //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = (Convert.ToUInt16(adr_C[i], 16) + 3) | Convert.ToUInt16("0F00", 16);
-                    send_address(Convert.ToString(toSend, 2), 0);
+                    Send_Address(Convert.ToString(toSend, 2), 0);
 
                     if (var != 4)
                     {
-                        send_address("1", 16); //Mise à 1 du bit data
+                        Send_Address("1", 16); //Mise à 1 du bit data
 
                         /*** adr_C[i] + 2 ***/
                         //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                         toSend = (Convert.ToUInt16(adr_C[i], 16) + 2) | Convert.ToUInt16("0F00", 16);
-                        send_address(Convert.ToString(toSend, 2), 0);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
                         //Envoie de l'adresse avec bit de sélection actif ('0')
-                        send_address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 2, 2), 0);
+                        Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 2, 2), 0);
                         //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                         //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                         toSend = (Convert.ToUInt16(adr_C[i], 16) + 2) | Convert.ToUInt16("0F00", 16);
-                        send_address(Convert.ToString(toSend, 2), 0);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
 
-                        send_address("0", 16); //Mise à 0 du bit data
+                        Send_Address("0", 16); //Mise à 0 du bit data
 
                         if (var != 1)
                         {
                             /*** adr_C[i] + var - 2 ***/
                             //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                             toSend = (Convert.ToUInt16(adr_C[i], 16) + var - 2) | Convert.ToUInt16("0F00", 16);
-                            send_address(Convert.ToString(toSend, 2), 0);
+                            Send_Address(Convert.ToString(toSend, 2), 0);
                             //Envoie de l'adresse avec bit de sélection actif ('0')
-                            send_address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + var - 2, 2), 0);
+                            Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + var - 2, 2), 0);
                             //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
 
 
-                            send_address("1", 16); //Mise à 1 du bit data
+                            Send_Address("1", 16); //Mise à 1 du bit data
 
                             toSend = (Convert.ToUInt16(adr_C[i], 16) + var - 2) | Convert.ToUInt16("0F00", 16);
-                            send_address(Convert.ToString(toSend, 2), 0);
+                            Send_Address(Convert.ToString(toSend, 2), 0);
                         }
                     }
                     break;
@@ -1478,7 +1559,7 @@ namespace PSEU
         }                       
 
         /*Fonction qui reçoit l'adresse à envoyer en string et l'envoie bit à bit à la carte*/
-        public void send_address(string address, int offset)
+        public void Send_Address(string address, int offset)
         {
             int size;
             string temp = "";
@@ -1492,10 +1573,10 @@ namespace PSEU
                         size = 11 - address.Length;
                         for (int i = 0; i < size; i++) //On complète les bits de poids fort par des "0" pour arriver à 11 bits
                         {
-                            temp = temp + "0";
+                            temp += "0";
                         }
 
-                        address = temp + address;
+                        address += address;
                     }
                 }
 
@@ -1534,7 +1615,7 @@ namespace PSEU
         {
             try //On essaie de fermer la Form3 (possible que si elle a été créé)
             {
-                if (DispCommands != null)
+                if (Application.OpenForms["Form3"] != null)
                 {
                     /*Fermeture de la fenêtre d'envoie des commandes*/
                     DispCommands.Close();
@@ -1550,8 +1631,8 @@ namespace PSEU
                         {
                             disp_fdbk.Join(); // On attend que le thread soit terminé
                         }
-                        send_address("1", 16 + 2); //Désactivation alim1
-                        send_address("1", 16 + 3); //Désactivation alim2
+                        Send_Address("1", 16 + 2); //Désactivation alim1
+                        Send_Address("1", 16 + 3); //Désactivation alim2
                     }
                 }
             }
@@ -1564,8 +1645,8 @@ namespace PSEU
                 {
                     disp_fdbk.Join(); // On attend que le thread soit terminé
                 }
-                send_address("1", 16 + 2); //Désactivation alim1
-                send_address("1", 16 + 3); //Désactivation alim2
+                Send_Address("1", 16 + 2); //Désactivation alim1
+                Send_Address("1", 16 + 3); //Désactivation alim2
             }
             finally
             {
