@@ -1,20 +1,18 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
+using System.Diagnostics; 
 using System.Drawing;
-using System.Text;
-using System.Windows.Forms;
 using System.IO;
 using System.Threading;
-using System.Diagnostics; //pour l'utiisation de stopwatch
+using System.Windows.Forms;
+using System.Text.RegularExpressions;
+
 
 
 namespace PSEU
 {
     public partial class Form1 : Form
     {
-        // Define class-level fields as nullable
+        // Define class-level fields
         private string[] adr_retour_I;
         private string[] adr_retour_O;
         private string[] adr_I;
@@ -41,21 +39,16 @@ namespace PSEU
 
         public Form1(string BenchTypeValue)
         {
-            if(BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-            {
-                inpt = new bool[12];
-                outp = new bool[11];
-            }
-            else
-            {
-                inpt = new bool[18];
-                outp = new bool[48];
-            }
+            this.BenchTypeValue = BenchTypeValue ?? "Default"; // make sure to initialized values
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            inpt = new bool[isPCx ? 12 : 18];
+            outp = new bool[isPCx ? 11 : 48];
             InitializeComponent();
+            groupBox6.Text = isPCx ? "FORCE LLS" : "FORCE SENSORS";
+            this.FormClosing += Form1_FormClosing;
+            Init_Values(BenchTypeValue);
 
-            Init_Values(BenchTypeValue ?? "Default");
-
-            Init_Cells_Content(BenchTypeValue ?? "Default"); //Fonction qui initialise le contenu des dataGridView (onglet "Control")
+            Init_Cells_Content(); //Fonction qui initialise le contenu des dataGridView (onglet "Control")
             Color_Cells(); //Colotise les cellules en fonction de leur état (actif / inactif)
 
             timer_feedback.Tick += new EventHandler(Timer_tick); // Everytime timer ticks, Timer_tick will be called
@@ -192,12 +185,15 @@ namespace PSEU
         {
             string tosendlist = "";
             string[] send;
-            int size;
             char IOS;
             int number;
             //string value;
 
             button2.Enabled = false;
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 load_force = (UInt16)(isPCx ? 11 : 48);
+            UInt16 force_sensor = (UInt16)(isPCx ? 18 : 24);
+            UInt16 force_input = (UInt16)(isPCx ? 12 : 18);
 
             timer_feedback.Enabled = false; //désactivation du timer d'affichage des retours en mode manuel
             if (disp_fdbk.IsAlive)
@@ -206,7 +202,7 @@ namespace PSEU
             }
 
             /*Récupération de force LOAD*/
-            for (int i = 0; i < 48; i++)
+            for (int i = 0; i < load_force; i++)
             {
                 if (dataGridView4.Rows[i / 16].Cells[i % 16].Style.BackColor == System.Drawing.Color.Yellow)
                 {
@@ -217,7 +213,7 @@ namespace PSEU
             }
 
             /*Récupération de force SENSORS*/
-            for (int i = 0; i < 24; i++)
+            for (int i = 0; i < force_sensor; i++)
             {
                 if (dataGridView5.Rows[i / 12].Cells[i % 12].Style.BackColor == System.Drawing.Color.Yellow)
                 {
@@ -228,7 +224,7 @@ namespace PSEU
             }
 
             /*Récupéraiton de force INPUT*/
-            for (int i = 0; i < 18; i++)
+            for (int i = 0; i < force_input; i++)
             {
                 if (dataGridView6.Rows[i / 16].Cells[i % 16].Style.BackColor == System.Drawing.Color.Yellow)
                 {
@@ -239,34 +235,45 @@ namespace PSEU
             }
 
             send = tosendlist.Split('\n');
-            size = send.Length;
-            for (int i = 0; i < size - 1; i++)
+            for (int i = 0; i < send.Length - 1; i++)
             {
-                IOS = send[i][0];
-                number = Convert.ToInt32(send[i][1].ToString() + send[i][2].ToString()) - 1; //-1 car tableau pars de 0
-                
-                if (IOS == 'O')
+                var line = send[i];
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                // 1) split header ("Wet1" / "S03" / "O12" / etc) from value
+                var parts = line.Split(':');
+                if (parts.Length < 2) continue;
+                var header = parts[0];              // e.g. "Wet1" or "S03" or "O05"
+                var digits = Regex.Match(header, @"\d+").Value;
+                if (!int.TryParse(digits, out int num)) continue;
+
+                number = num - 1;
+
+                if (isPCx && Regex.IsMatch(header, @"^(Wet|SH|Op)\d+"))
                 {
-                    Cde_variable(1, number);
+                    IOS = 'S';
                 }
-                else if (IOS == 'I')
+                else
                 {
-                    Cde_variable(2, number);
+                    // fall back to first letter of header: S, O or I
+                    IOS = header[0];
                 }
-                else if (IOS == 'S')
+
+                // 3) call your existing Cde_variable
+                switch (IOS)
                 {
-                    Cde_variable(3, number);
+                    case 'O':
+                        Cde_variable(1, number);
+                        break;
+                    case 'I':
+                        Cde_variable(2, number);
+                        break;
+                    case 'S':
+                        Cde_variable(3, number);
+                        break;
+                    default:
+                        break;
                 }
-                                
-                /*IOS = send[i][0];
-                number = Convert.ToInt32(send[i][1].ToString() + send[i][2].ToString());
-                value = "";
-                for (int j = 4; j < send[i].Length; j = j + 1)
-                {
-                    value += send[i][j];
-                }
-                MessageBox.Show(IOS.ToString() + "\t" + number.ToString() + "\t" + value);
-                //ENVOIE DES COMMANDES DE FORCAGE ICI*/
             }
 
             //Thread.Sleep(10);
@@ -291,7 +298,7 @@ namespace PSEU
             if (button4.Text == "Auto")
             {
                 timer_feedback.Enabled = false; //désactivation du timer d'affichage des retours en mode manuel
-                Form2 ConfAutoDialog = new Form2();
+                Form2 ConfAutoDialog = new Form2(this.BenchTypeValue);
 
                 if (ConfAutoDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
                 {
@@ -330,18 +337,9 @@ namespace PSEU
 
             Send_Address("111", 8); //Désactivation des 3 bits d'enable des décodeurs
 
-            UInt16 ctrl_input, ctrl_output;
-
-            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-            {
-                ctrl_input = 12;
-                ctrl_output = 11;
-            }
-            else
-            {
-                ctrl_input = 18;
-                ctrl_output = 48;
-            }
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 ctrl_input = (UInt16)(isPCx ? 12 : 18);
+            UInt16 ctrl_output = (UInt16)(isPCx ? 11 : 48);
 
             /*Contrôle retour des entrées*/
             for (int i = 0; i < ctrl_input; i++)
@@ -420,6 +418,7 @@ namespace PSEU
         {
             int index;
             string cell;
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
 
             number--;
 
@@ -435,35 +434,59 @@ namespace PSEU
                 dataGridView1.Refresh();
             }
 
-            switch (value)
+            if(isPCx)
             {
-                case "f":
-                    value = "Far";
-                    break;
-                case "n":
-                    value = "Near";
-                    break;
-                case "m":
-                    value = "Medium";
-                    break;
-                case "o":
-                    value = "Open";
-                    break;
-                case "s":
-                    value = "Short";
-                    break;
-                case "l":
-                    value = "Load";
-                    break;
-                case "0":
-                    value = "OFF";
-                    break;
-                case "1":
-                    value = "ON";
-                    break;
-                default:
-                    break;
+                switch (value)
+                {
+                    case "n":
+                        value = "No";
+                        break;
+                    case "y":
+                        value = "Yes";
+                        break;
+                    case "0":
+                        value = "OFF";
+                        break;
+                    case "1":
+                        value = "ON";
+                        break;
+                    default:
+                        break;
+                }
             }
+            else
+            {
+                switch (value)
+                {
+                    case "f":
+                        value = "Far";
+                        break;
+                    case "n":
+                        value = "Near";
+                        break;
+                    case "m":
+                        value = "Medium";
+                        break;
+                    case "o":
+                        value = "Open";
+                        break;
+                    case "s":
+                        value = "Short";
+                        break;
+                    case "l":
+                        value = "Load";
+                        break;
+                    case "0":
+                        value = "OFF";
+                        break;
+                    case "1":
+                        value = "ON";
+                        break;
+                    default:
+                        break;
+                }
+            }
+            
 
             switch (IOS)
             {
@@ -627,25 +650,25 @@ namespace PSEU
         /*Sélection des états des forçage des capteurs*/
         private void Control_Panel_Force_Sensors(object sender, DataGridViewCellEventArgs e)
         {
-            if (dataGridView5.CurrentCell.Value.ToString().Contains("Far"))
+            var cell = dataGridView5.CurrentCell;
+            if (cell == null) return;
+
+            string txt = cell.Value?.ToString() ?? "";
+
+            if (BenchTypeValue == "PC12" || BenchTypeValue == "PC21")
             {
-                dataGridView5.CurrentCell.Value = dataGridView5.CurrentCell.Value.ToString().Replace("Far", "Near");
-            }
-            else if (dataGridView5.CurrentCell.Value.ToString().Contains("Near"))
-            {
-                dataGridView5.CurrentCell.Value = dataGridView5.CurrentCell.Value.ToString().Replace("Near", "Med");
-            }
-            else if (dataGridView5.CurrentCell.Value.ToString().Contains("Med"))
-            {
-                dataGridView5.CurrentCell.Value = dataGridView5.CurrentCell.Value.ToString().Replace("Med", "Open");
-            }
-            else if (dataGridView5.CurrentCell.Value.ToString().Contains("Open"))
-            {
-                dataGridView5.CurrentCell.Value = dataGridView5.CurrentCell.Value.ToString().Replace("Open", "Short");
+                if (txt.EndsWith("NO"))
+                    cell.Value = txt.Replace("NO", "YES");
+                else
+                    cell.Value = txt.Replace("YES", "NO");
             }
             else
             {
-                dataGridView5.CurrentCell.Value = dataGridView5.CurrentCell.Value.ToString().Replace("Short", "Far");
+                if (txt.Contains("Far")) cell.Value = txt.Replace("Far", "Near");
+                else if (txt.Contains("Near")) cell.Value = txt.Replace("Near", "Med");
+                else if (txt.Contains("Med")) cell.Value = txt.Replace("Med", "Open");
+                else if (txt.Contains("Open")) cell.Value = txt.Replace("Open", "Short");
+                else cell.Value = txt.Replace("Short", "Far");
             }
             dataGridView5.DefaultCellStyle.SelectionBackColor = System.Drawing.Color.Yellow;
             dataGridView5.CurrentCell.Style.BackColor = System.Drawing.Color.Yellow;
@@ -806,10 +829,9 @@ namespace PSEU
         }
 
         /*Fonction qui initialise le contenu des dataGridView (onglet "Control")*/
-        public void Init_Cells_Content(string BenchTypeValue)
+        public void Init_Cells_Content()
         {
             string cells_content;
-            UInt16 ctrl_input, ctrl_output;
             toolStripStatusLabel1.Text = "Ready";
 
             /*Contenu par défaut de "SUPPLY"*/
@@ -818,16 +840,9 @@ namespace PSEU
             dataGridView1.Rows[0].Cells[2].Value = "BENCH supply1:1 / OFF";
             dataGridView1.Rows[0].Cells[3].Value = "BENCH supply2:1 / OFF";
 
-            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-            {
-                ctrl_input = 12;
-                ctrl_output = 11;
-            }
-            else
-            {
-                ctrl_input = 18;
-                ctrl_output = 48;
-            }
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 ctrl_input = (UInt16)(isPCx ? 12 : 18);
+            UInt16 ctrl_output = (UInt16)(isPCx ? 11 : 48);
 
             /*Contenu par défaut de "CONTROL INPUT VOLTAGE"*/
             dataGridView2.Rows.Add(1);
@@ -874,16 +889,9 @@ namespace PSEU
         public void Init_F_LOAD_Cells()
         {
             string cells_content;
-            UInt16 load_force;
 
-            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-            {
-                load_force = 11;
-            }
-            else
-            {
-                load_force = 48;
-            }
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 load_force = (UInt16)(isPCx ? 11 : 48);
 
             for (int i = 0; i < load_force; i++)
             {
@@ -903,27 +911,38 @@ namespace PSEU
         public void Init_F_SENSORS_Cells()
         {
             string cells_content;
-            UInt16 force_sensor;
-
-            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-            {
-                force_sensor = 24;
-            }
-            else
-            {
-                force_sensor = 24;
-            }
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 force_sensor = (UInt16)(isPCx ? 18 : 24);
 
             for (int i = 0; i < force_sensor; i++)
             {
-                cells_content = "S";
-                if (i < 9)
+                if (BenchTypeValue == "PC12" || BenchTypeValue == "PC21")
                 {
-                    cells_content += "0";
+                    if(i < 6)
+                    {
+                        cells_content = "Wet";
+                        cells_content += ((i%6 + 1) + ":NO");
+                    }
+                    else if(i < 6*2)
+                    {
+                        cells_content = "SH";
+                        cells_content += ((i % 6 + 1) + ":NO");
+                    }
+                    else
+                    {
+                        cells_content = "Op";
+                        cells_content += ((i % 6 + 1) + ":NO"); 
+                    }
+                    dataGridView5.Rows[i / 12].Cells[i % 12].Value = cells_content;
                 }
-                cells_content += ((i + 1) + ":Far");
-                dataGridView5.Rows[i / 12].Cells[i % 12].Value = cells_content;
+                else 
+                {
+                    cells_content = "S";
+                    cells_content += (i < 9) ? "0" : "";
 
+                    cells_content += ((i + 1) + ":Far");
+                    dataGridView5.Rows[i / 12].Cells[i % 12].Value = cells_content;
+                }
                 dataGridView5.DefaultCellStyle.SelectionBackColor = Color.White;
                 dataGridView5.Rows[i / 12].Cells[i % 12].Style.BackColor = Color.White;
             }
@@ -932,15 +951,16 @@ namespace PSEU
         public void Init_F_INPUT_Cells()
         {
             string cells_content;
-            UInt16 force_input;
 
-            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 force_input = (UInt16)(isPCx ? 12 : 18);
+
+            int cols = dataGridView6.ColumnCount;
+            int neededRows = (force_input + cols - 1) / cols;
+            dataGridView6.Rows.Clear();
+            for (int r = 0; r < neededRows; r++)
             {
-                force_input = 12;
-            }
-            else
-            {
-                force_input = 18;
+                dataGridView6.Rows.Add();
             }
 
             for (int i = 0; i < force_input; i++)
@@ -1046,25 +1066,16 @@ namespace PSEU
         /***** Fonction qui colorise les cellules retour des entrées et des sorties *****/
         private void Color_Cells()
         {
-            string cur_cont;
             int i;
-            UInt16 ctrl_input, ctrl_output;
-
-            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-            {
-                ctrl_input = 12;
-                ctrl_output = 11;
-            }
-            else
-            {
-                ctrl_input = 18;
-                ctrl_output = 48;
-            }
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 ctrl_input = (UInt16)(isPCx ? 12 : 18);
+            UInt16 ctrl_output = (UInt16)(isPCx ? 11 : 48);
 
             /*Entrées*/
             for (i = 0; i < ctrl_input; i++)
             {
-                cur_cont = dataGridView2.Rows[i / 16].Cells[i % 16].Value.ToString();
+                var raw = dataGridView2.Rows[i / 16].Cells[i % 16].Value;
+                string cur_cont = raw != null ? raw.ToString() : "";
                 if ((cur_cont.Contains("!") && cur_cont.EndsWith("0")) || ((!cur_cont.Contains("!")) && cur_cont.EndsWith("1")))
                 {
                     dataGridView2.Rows[i / 16].Cells[i % 16].Style.BackColor = Color.DeepSkyBlue;
@@ -1080,7 +1091,8 @@ namespace PSEU
             /*Sorties*/
             for (i = 0; i < ctrl_output; i++)
             {
-                cur_cont = dataGridView3.Rows[i / 16].Cells[i % 16].Value.ToString();
+                var raw = dataGridView3.Rows[i / 16].Cells[i % 16].Value;
+                string cur_cont = raw != null ? raw.ToString() : "";
                 if ((cur_cont.Contains("!") && cur_cont.EndsWith("0")) || ((!cur_cont.Contains("!")) && cur_cont.EndsWith("1")))
                 {
                     dataGridView3.Rows[i / 16].Cells[i % 16].Style.BackColor = Color.DeepSkyBlue;
@@ -1099,6 +1111,8 @@ namespace PSEU
         private void Load_button(object sender, EventArgs e)
         {
             DialogResult dialogResult = MessageBox.Show("FORCE LOAD - Are you sure to restore default values ?", "Default values", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 reset_output = (UInt16)(isPCx ? 11 : 48);
             if (dialogResult == DialogResult.Yes)
             {
                 timer_feedback.Enabled = false; //désactivation du timer d'affichage des retours en mode manuel
@@ -1110,7 +1124,7 @@ namespace PSEU
                 Init_F_LOAD_Cells();
 
                 /*Envoie des commandes de reset pour les sorties*/
-                for (int k = 0; k < 48; k++)
+                for (int k = 0; k < reset_output; k++)
                 {
                     Cde_variable(1, k);
                 }
@@ -1123,6 +1137,8 @@ namespace PSEU
         private void Sensor_button(object sender, EventArgs e)
         {
             DialogResult dialogResult = MessageBox.Show("FORCE SENSORS - Are you sure to restore default values ?", "Default values", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 force_sensor = (UInt16)(isPCx ? 18 : 24);
             if (dialogResult == DialogResult.Yes)
             {
                 timer_feedback.Enabled = false; //désactivation du timer d'affichage des retours en mode manuel
@@ -1134,7 +1150,7 @@ namespace PSEU
                 Init_F_SENSORS_Cells();
 
                 /*Envoie des commandes de reset pour les capteurs*/
-                for (int k = 0; k < 24; k++)
+                for (int k = 0; k < force_sensor; k++)
                 {
                     Cde_variable(3, k);
                 }
@@ -1148,6 +1164,8 @@ namespace PSEU
         private void Input_button(object sender, EventArgs e)
         {
             DialogResult dialogResult = MessageBox.Show("FORCE INPUT - Are you sure to restore default values ?", "Default values", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 reset_input = (UInt16)(isPCx ? 12 : 18);
             if (dialogResult == DialogResult.Yes)
             {
                 timer_feedback.Enabled = false; //désactivation du timer d'affichage des retours en mode manuel
@@ -1159,7 +1177,7 @@ namespace PSEU
                 Init_F_INPUT_Cells();
 
                 /*Envoie des commandes de reset pour les entrées*/
-                for (int k = 0; k < 18; k++)
+                for (int k = 0; k < reset_input; k++)
                 {
                     Cde_variable(2, k);
                 }
@@ -1254,17 +1272,10 @@ namespace PSEU
         
         public void Cde_reset()
         {
-            UInt16 ctrl_input, ctrl_output;
-            if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-            {
-                ctrl_input = 12;
-                ctrl_output = 11;
-            }
-            else
-            {
-                ctrl_input = 18;
-                ctrl_output = 48;
-            }
+            bool isPCx = BenchTypeValue == "PC21" || BenchTypeValue == "PC12";
+            UInt16 ctrl_input = (UInt16)(isPCx ? 12 : 18);
+            UInt16 ctrl_output = (UInt16)(isPCx ? 11 : 48);
+            UInt16 force_sensor = (UInt16)(isPCx ? 18 : 24);
             /*Remise à zéro de la fenêtre graphique*/
             Init_F_INPUT_Cells();
             Init_F_LOAD_Cells();
@@ -1301,7 +1312,7 @@ namespace PSEU
             }
 
             /*Envoie des commandes de reset pour les capteurs*/
-            for (int k = 0; k < 24; k++)
+            for (int k = 0; k < force_sensor; k++)
             {
                 Cde_variable(3, k);
             }
@@ -1317,7 +1328,8 @@ namespace PSEU
             
             string cell;
             int toSend, var; //var contient 1, 2, 3, 4 ou 5 en fonction de l'état de la variable pointée
-            
+            bool isPCx = BenchTypeValue == "PC12" || BenchTypeValue == "PC21";
+
             switch (IOS)
             {
                 /*Gestion sorties*/
@@ -1345,7 +1357,7 @@ namespace PSEU
                         //var = 2; --> semblait OK avec les test du 04/09/13
                         var = 3;
                     }
-                                        
+
                     Send_Address("0", 16); //Mise à 0 du bit data
 
                     /*** adr_O[i] + 1 ***/
@@ -1402,7 +1414,7 @@ namespace PSEU
                     break;
 
                 /*Gestion entrées*/
-                case 2 :
+                case 2:
                     cell = dataGridView6.Rows[i / 16].Cells[i % 16].Value.ToString();
 
                     if (cell.Contains("OFF")) //OFF (ETAT INITIAL DES ENTREES)
@@ -1433,93 +1445,69 @@ namespace PSEU
                     //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
                     //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
                     toSend = Convert.ToUInt16(adr_I[i], 16) | Convert.ToUInt16("0F00", 16);
-                    Send_Address(Convert.ToString(toSend, 2), 0); 
+                    Send_Address(Convert.ToString(toSend, 2), 0);
                     break;
 
                 /*Gestion capteurs*/
-                case 3 :
-                    cell = dataGridView5.Rows[i / 12].Cells[i % 12].Value.ToString();
-
-                    if (cell.Contains("Far")) //Far (ETAT INITIAL DES CAPTEURS)
+                case 3:
+                    if (!isPCx)
                     {
-                        //var = 4;
-                        //var = 5;
-                        var = 1;
-                    }
-                    else if (cell.Contains("Near")) //Near
-                    {
-                        //var = 5;
-                        //var = 4;
-                        var = 2;
-                    }
-                    else if (cell.Contains("Med")) //Med
-                    {
-                        //var = 3;
-                        //var = 3;
-                        var = 3;
-                    }
-                    else if (cell.Contains("Open")) //Open
-                    {
-                        //var = 1;
-                        //var = 2;
-                        var = 4;
-                    }
-                    else //Short
-                    {
-                        //var = 2;
-                        //var = 1;
-                        var = 5;
-                    }
+                        cell = dataGridView5.Rows[i / 12].Cells[i % 12].Value.ToString();
 
-                    Send_Address("0", 16); //Mise à 0 du bit data
+                        if (cell.Contains("Far")) //Far (ETAT INITIAL DES CAPTEURS)
+                        {
+                            //var = 4;
+                            //var = 5;
+                            var = 1;
+                        }
+                        else if (cell.Contains("Near")) //Near
+                        {
+                            //var = 5;
+                            //var = 4;
+                            var = 2;
+                        }
+                        else if (cell.Contains("Med")) //Med
+                        {
+                            //var = 3;
+                            //var = 3;
+                            var = 3;
+                        }
+                        else if (cell.Contains("Open")) //Open
+                        {
+                            //var = 1;
+                            //var = 2;
+                            var = 4;
+                        }
+                        else //Short
+                        {
+                            //var = 2;
+                            //var = 1;
+                            var = 5;
+                        }
 
-                    /*** adr_C[i] ***/
-                    //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
-                    toSend = Convert.ToUInt16(adr_C[i], 16) | Convert.ToUInt16("0F00", 16);
-                    Send_Address(Convert.ToString(toSend, 2), 0);
-                    //Envoie de l'adresse avec bit de sélection actif ('0')
-                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16), 2), 0);
-                    //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
-                    //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
-                    toSend = Convert.ToUInt16(adr_C[i], 16) | Convert.ToUInt16("0F00", 16);
-                    Send_Address(Convert.ToString(toSend, 2), 0);
+                        Send_Address("0", 16); //Mise à 0 du bit data
 
-                    /*** adr_C[i] + 1 ***/
-                    //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
-                    toSend = (Convert.ToUInt16(adr_C[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
-                    Send_Address(Convert.ToString(toSend, 2), 0);
-                    //Envoie de l'adresse avec bit de sélection actif ('0')
-                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 1, 2), 0);
-                    //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
-                    //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
-                    toSend = (Convert.ToUInt16(adr_C[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
-                    Send_Address(Convert.ToString(toSend, 2), 0);
+                        /*** adr_C[i] ***/
+                        //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
+                        toSend = Convert.ToUInt16(adr_C[i], 16) | Convert.ToUInt16("0F00", 16);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
+                        //Envoie de l'adresse avec bit de sélection actif ('0')
+                        Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16), 2), 0);
+                        //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
+                        //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
+                        toSend = Convert.ToUInt16(adr_C[i], 16) | Convert.ToUInt16("0F00", 16);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
 
-                    /*** adr_C[i] + 2 ***/
-                    //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
-                    toSend = (Convert.ToUInt16(adr_C[i], 16) + 2) | Convert.ToUInt16("0F00", 16);
-                    Send_Address(Convert.ToString(toSend, 2), 0);
-                    //Envoie de l'adresse avec bit de sélection actif ('0')
-                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 2, 2), 0);
-                    //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
-                    //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
-                    toSend = (Convert.ToUInt16(adr_C[i], 16) + 2) | Convert.ToUInt16("0F00", 16);
-                    Send_Address(Convert.ToString(toSend, 2), 0);
-
-                    /*** adr_C[i] + 3 ***/
-                    //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
-                    toSend = (Convert.ToUInt16(adr_C[i], 16) + 3) | Convert.ToUInt16("0F00", 16);
-                    Send_Address(Convert.ToString(toSend, 2), 0);
-                    //Envoie de l'adresse avec bit de sélection actif ('0')
-                    Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 3, 2), 0);
-                    //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
-                    //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
-                    toSend = (Convert.ToUInt16(adr_C[i], 16) + 3) | Convert.ToUInt16("0F00", 16);
-                    Send_Address(Convert.ToString(toSend, 2), 0);
-
-                    if (var != 4)
-                    {
-                        Send_Address("1", 16); //Mise à 1 du bit data
+                        /*** adr_C[i] + 1 ***/
+                        //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
+                        toSend = (Convert.ToUInt16(adr_C[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
+                        //Envoie de l'adresse avec bit de sélection actif ('0')
+                        Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 1, 2), 0);
+                        //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
+                        //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
+                        toSend = (Convert.ToUInt16(adr_C[i], 16) + 1) | Convert.ToUInt16("0F00", 16);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
 
                         /*** adr_C[i] + 2 ***/
                         //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
@@ -1532,23 +1520,66 @@ namespace PSEU
                         toSend = (Convert.ToUInt16(adr_C[i], 16) + 2) | Convert.ToUInt16("0F00", 16);
                         Send_Address(Convert.ToString(toSend, 2), 0);
 
-                        Send_Address("0", 16); //Mise à 0 du bit data
+                        /*** adr_C[i] + 3 ***/
+                        //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
+                        toSend = (Convert.ToUInt16(adr_C[i], 16) + 3) | Convert.ToUInt16("0F00", 16);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
+                        //Envoie de l'adresse avec bit de sélection actif ('0')
+                        Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 3, 2), 0);
+                        //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
+                        //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
+                        toSend = (Convert.ToUInt16(adr_C[i], 16) + 3) | Convert.ToUInt16("0F00", 16);
+                        Send_Address(Convert.ToString(toSend, 2), 0);
 
-                        if (var != 1)
+                        if (var != 4)
                         {
-                            /*** adr_C[i] + var - 2 ***/
-                            //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
-                            toSend = (Convert.ToUInt16(adr_C[i], 16) + var - 2) | Convert.ToUInt16("0F00", 16);
-                            Send_Address(Convert.ToString(toSend, 2), 0);
-                            //Envoie de l'adresse avec bit de sélection actif ('0')
-                            Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + var - 2, 2), 0);
-                            //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
-
-
                             Send_Address("1", 16); //Mise à 1 du bit data
 
-                            toSend = (Convert.ToUInt16(adr_C[i], 16) + var - 2) | Convert.ToUInt16("0F00", 16);
+                            /*** adr_C[i] + 2 ***/
+                            //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
+                            toSend = (Convert.ToUInt16(adr_C[i], 16) + 2) | Convert.ToUInt16("0F00", 16);
                             Send_Address(Convert.ToString(toSend, 2), 0);
+                            //Envoie de l'adresse avec bit de sélection actif ('0')
+                            Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + 2, 2), 0);
+                            //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
+                            //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
+                            toSend = (Convert.ToUInt16(adr_C[i], 16) + 2) | Convert.ToUInt16("0F00", 16);
+                            Send_Address(Convert.ToString(toSend, 2), 0);
+
+                            Send_Address("0", 16); //Mise à 0 du bit data
+
+                            if (var != 1)
+                            {
+                                /*** adr_C[i] + var - 2 ***/
+                                //On prépositionne l'adresse avec les 3 bits de sélection inactifs ('1')
+                                toSend = (Convert.ToUInt16(adr_C[i], 16) + var - 2) | Convert.ToUInt16("0F00", 16);
+                                Send_Address(Convert.ToString(toSend, 2), 0);
+                                //Envoie de l'adresse avec bit de sélection actif ('0')
+                                Send_Address(Convert.ToString(Convert.ToUInt16(adr_C[i], 16) + var - 2, 2), 0);
+                                //--> VOIR SI BESOIN DE METTRE UN DELAI ENTRE LE MOMENT OU LES 3 BITS DE SELCTION PASSENT DE ACTIFS A INACTIFS
+
+
+                                Send_Address("1", 16); //Mise à 1 du bit data
+
+                                toSend = (Convert.ToUInt16(adr_C[i], 16) + var - 2) | Convert.ToUInt16("0F00", 16);
+                                Send_Address(Convert.ToString(toSend, 2), 0);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Send_Address("0", 16); //Mise à 0 du bit data
+                        int idx = 11 + i;
+
+                        ushort addr = (ushort)(Convert.ToUInt16(adr_O[idx], 16) + 1);
+                        Send_Address(Convert.ToString((ushort)(0x0F00 | addr), 2), 0);
+                        Send_Address(Convert.ToString(addr, 2), 0);
+                        if (dataGridView5.Rows[i / 12].Cells[i % 12].Value.ToString().Contains("YES"))
+                        {
+                            Send_Address("1", 16);
+                            addr = (ushort)(Convert.ToUInt16(adr_O[idx], 16) + 1);
+                            Send_Address(Convert.ToString((ushort)(0x0F00 | addr), 2), 0);
+                            Send_Address(Convert.ToString(addr, 2), 0);
                         }
                     }
                     break;
@@ -1613,6 +1644,12 @@ namespace PSEU
 
         private void Form1_FormClosing(object sender, FormClosingEventArgs e)
         {
+            timer_feedback.Enabled = false;
+            if (disp_fdbk != null && disp_fdbk.IsAlive)
+            {
+                disp_fdbk.Join();
+            }
+                
             try //On essaie de fermer la Form3 (possible que si elle a été créé)
             {
                 if (Application.OpenForms["Form3"] != null)
