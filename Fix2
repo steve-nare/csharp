@@ -1,88 +1,86 @@
-**Réfléchir à la logique des capteurs**
+Here’s how you can make your **Form2** “Search” button jump into the right ATP folder based on `BenchTypeValue`.
 
-Il semble que la logique de préfixe dans les cellules du capteur soit incorrecte. Le préfixe devrait être 'S' au lieu de 'Wet', 'SH' ou 'Op'. Une approche possible consiste à ajuster l'initialisation des capteurs pour utiliser un préfixe uniforme, comme 'S01:NO'. Alternativement, dans la logique de l'Apply_button, je pourrais extraire la lettre IOS avant le deux-points et m'assurer que le type de capteur soit toujours représenté par 'S'. Tout cela pour éviter l'erreur de parsing.
+---
 
-Réflexion durant 13 secondes
+### 1. Pass `BenchTypeValue` into Form2
 
-The crash happens because your “Wet1:YES” / “SH2:NO” prefixes no longer start with a digit, so this line blows up:
+In **Form1**, wherever you do
 
 ```csharp
-IOS = send[i][0];
-number = Convert.ToInt32(send[i][1].ToString() + send[i][2].ToString()) - 1;
+Form2 ConfAutoDialog = new Form2();
 ```
 
-You need to pull the numeric part out of whatever prefix you’ve got, and force all PC12/PC21 sensors to be treated as `'S'`.
-
-Here’s a drop‑in replacement for your loop in `Apply_button` that will:
-
-1. Split on the `:`  
-2. Pull out **all** digits in the left‐hand side  
-3. Zero‐base it  
-4. Force PC12/PC21‐sensor commands to `IOS='S'`  
+change it to
 
 ```csharp
-using System.Text.RegularExpressions;
-// …
+Form2 ConfAutoDialog = new Form2(this.BenchTypeValue);
+```
 
-private void Apply_button(object sender, EventArgs e)
+and add an overload on your **Form2**:
+
+```csharp
+public partial class Form2 : Form
 {
-    // … (everything up to send = tosendlist.Split('\n');)
+    private readonly string _benchTypeValue;
 
-    send = tosendlist.Split('\n');
-    for (int i = 0; i < send.Length - 1; i++)
+    // New ctor:
+    public Form2(string benchTypeValue)
     {
-        var line = send[i];
-        if (string.IsNullOrWhiteSpace(line)) continue;
-
-        // 1) split header ("Wet1" / "S03" / "O12" / etc) from value
-        var parts = line.Split(':');
-        if (parts.Length < 2) continue;
-        var header = parts[0];              // e.g. "Wet1" or "S03" or "O05"
-        var digits = Regex.Match(header, @"\d+").Value;
-        if (!int.TryParse(digits, out int num)) continue;
-
-        int number = num - 1;               // zero‐based index
-
-        // 2) decide IOS code
-        char IOS;
-        bool isPCx = BenchTypeValue == "PC12" || BenchTypeValue == "PC21";
-        if (isPCx && /* any sensor header */ Regex.IsMatch(header, @"^(Wet|SH|Op)\d+"))
-        {
-            IOS = 'S';
-        }
-        else
-        {
-            // fall back to first letter of header: S, O or I
-            IOS = header[0];
-        }
-
-        // 3) call your existing Cde_variable
-        switch (IOS)
-        {
-            case 'O':
-                Cde_variable(1, number);
-                break;
-            case 'I':
-                Cde_variable(2, number);
-                break;
-            case 'S':
-                Cde_variable(3, number);
-                break;
-            default:
-                // unknown prefix: ignore
-                break;
-        }
+        InitializeComponent();
+        _benchTypeValue = benchTypeValue;
     }
 
-    // … (rest of your method unchanged)
+    // … your existing ctor(Form2()) can forward into this one if you like:
+    public Form2() : this("Default") { }
 }
 ```
 
-#### What changed?
+---
 
-- **Regex** to extract *all* digits out of `"Wet1"`, `"SH12"`, `"S03"` etc., instead of assuming fixed positions.
-- **Header splitting** on `':'`, so you never accidentally parse the `YES`/`NO` bits.
-- For PC12/PC21, any header beginning with `Wet`, `SH`, or `Op` is mapped to an IOS=`'S'` (sensor).
-- Otherwise you still honor your old logic (`header[0]` gives you `'O'`, `'I'` or `'S'`).
+### 2. In Form2, wire up the Search‐button
 
-With that in place the `FormatException` will go away and your apply routine will correctly drive `Cde_variable(3, …)` for every “YES/NO” toggle.
+Suppose your “Search” button is called `buttonSearch`, and you have a TextBox called `textBoxLink` to receive the folder. In Form2 add:
+
+```csharp
+using System.IO;
+using System.Windows.Forms;
+
+public partial class Form2 : Form
+{
+    // … your existing members …
+
+    private void buttonSearch_Click(object sender, EventArgs e)
+    {
+        using (var folderDlg = new FolderBrowserDialog())
+        {
+            // decide default folder name
+            string baseDir = Application.StartupPath; // or wherever you keep your ATP folders
+            string sub = _benchTypeValue switch
+            {
+                "PC12" => "ATP12",
+                "PC21" => "ATP21",
+                _      => "ATP"
+            };
+
+            string defaultPath = Path.Combine(baseDir, sub);
+            // if it doesn’t exist, FolderBrowserDialog will just show the nearest parent
+            folderDlg.SelectedPath = defaultPath;
+
+            if (folderDlg.ShowDialog(this) == DialogResult.OK)
+            {
+                textBoxLink.Text = folderDlg.SelectedPath;
+            }
+        }
+    }
+}
+```
+
+---
+
+#### What this does
+
+- **Form1** now tells **Form2** which bench you’re on.
+- **Form2** stores that in `_benchTypeValue`.
+- When the user clicks **Search**, we pick the right subfolder name (`ATP12`, `ATP21` or `ATP`) and pre‐seed the `FolderBrowserDialog` there.
+
+That way, for PC12 benches you start browsing in **…\ATP12**, for PC21 in **…\ATP21**, otherwise in **…\ATP**.
