@@ -12,9 +12,11 @@ namespace PSEU
     public partial class Form2 : Form
     {
         double glob_nbr_line = 0;
+        private readonly string _benchTypeValue;
 
-        public Form2()
+        public Form2(string benchTypeValue)
         {
+            _benchTypeValue = benchTypeValue;
             InitializeComponent();
             Init_Form2();
         }
@@ -33,10 +35,8 @@ namespace PSEU
         private void Reset_button(object sender, EventArgs e)
         {
             string link;
-            //string file_error = "";
-            //int ver_atp_return;
 
-            Directory.SetCurrentDirectory("./ATP");
+            Directory.SetCurrentDirectory("./ATP12");
             OpenFileDialog openFileDialog1 = new OpenFileDialog();
             openFileDialog1.Filter = "ATP Files|*.atp";
             openFileDialog1.Title = "Select an *.ATP file";
