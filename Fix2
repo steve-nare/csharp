@@ -1,97 +1,101 @@
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Windows.Forms;
+
+…
+
 private bool ValidateDash(string line, string filePath, int lineNumber)
 {
-    // must start with '-' and have at least one more char
-    if (string.IsNullOrWhiteSpace(line) || line.Length < 2 || line[0] != '-')
+    // Remove the leading '-' and split on spaces
+    var tokens = line.Substring(1)
+                     .Trim()
+                     .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+    if (tokens.Length == 0)
         return false;
 
-    char sub = line[1];
-    // handle generic dash-commands first
-    switch (sub)
+    switch (tokens[0])
     {
-        case 'r':
-            // reset: always valid
-            return true;
+        case "r":
+            // "-r" with no further args
+            return tokens.Length == 1;
 
-        case 'g':
-            // include another ATP: "-g XXX"
-            if (line.Length < 5) return false;
+        case "g":
+            // "-g <basename>"  ⇒ find <basename>.ATP in your AtpDirectory
+            if (tokens.Length != 2)
+                return false;
+
+            var atpName = tokens[1].EndsWith(".ATP", StringComparison.OrdinalIgnoreCase)
+                ? tokens[1]
+                : tokens[1] + ".ATP";
+
+            var full = Path.Combine(AtpDirectory, atpName);
+            if (!File.Exists(full))
             {
-                // extract filename (skip "-g ")
-                string name = line.Substring(3).Trim() + ".ATP";
-                string full = Path.Combine(AtpDirectory, name);
-                if (!Verify_Atp(full))
-                    return false;
+                MessageBox.Show(
+                    this,
+                    $"{atpName} not found in {AtpDirectory}",
+                    "Include File Missing",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+                return false;
             }
             return true;
 
-        case '|':
-            // comment to show in label: requires at least three chars ("-| ")
-            return line.Length >= 5;
+        case "|":
+            // "-| <some comment>"
+            return tokens.Length >= 2;
 
-        case '*':
-            // general comment: always valid
+        case "*":
+            // "-* ..." comment
             return true;
 
-        case 'p':
-            // pause prompt: "-p X Y"
-            return line.Length >= 5;
+        case "p":
+            // "-p ..." pause/comment
+            return tokens.Length >= 2;
 
-        case 'w':
-            // wait: "-w NNN"
-            if (line.Length < 5) return false;
-            string num = line.Substring(3).Trim();
-            return int.TryParse(num, out _);
+        case "w":
+            // "-w <milliseconds>"
+            if (tokens.Length != 2)
+                return false;
+            return int.TryParse(tokens[1], out _);
 
-        case 'c':
-            // ---- BEGIN your new check logic for "-c" ----
-
-            // split into three tokens: ioType, channel, value
-            var parts = line.Substring(2)
-                             .Trim()
-                             .Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length != 3)
+        case "c":
+            // "-c <iosId> <0|1>"
+            if (tokens.Length != 3)
                 return false;
 
-            // 1) ioType (p|i|s|o)
-            if (parts[0].Length != 1) 
-                return false;
-            char ioType = char.ToLowerInvariant(parts[0][0]);
-            if ("piso".IndexOf(ioType) < 0)
+            // tokens[1] e.g. "o1", "i9", "s13"
+            if (!Regex.IsMatch(tokens[1], @"^[ois]\d{1,2}$"))
                 return false;
 
-            // 2) channel number
-            if (!int.TryParse(parts[1], out int ch))
+            // tokens[2] must be '0' or '1'
+            if (!int.TryParse(tokens[2], out var v) || (v != 0 && v != 1))
                 return false;
 
-            bool isPCx = BenchTypeValue == "PC12" || BenchTypeValue == "PC21";
-            int maxChan;
-            switch (ioType)
-            {
-                case 'o': maxChan = isPCx ? 11 : 48; break;
-                case 'i': maxChan = isPCx ? 12 : 18; break;
-                case 's': maxChan = isPCx ? 18 : 24; break;
-                case 'p': maxChan = 2;                break;
-                default:  return false;
-            }
-            if (ch < 1 || ch > maxChan)
-                return false;
-
-            // 3) value  
-            string val = parts[2];
-            bool okVal = ioType switch
-            {
-                's' => (val.Length == 1 && "fnmos".Contains(val[0])),
-                _   => (val == "0" || val == "1")
-            };
-            if (!okVal)
-            {
-                ShowUnrecognized(line, lineNumber, filePath);
-            }
-
-            return okVal;
-        // ---- END "-c" logic ----
+            return true;
 
         default:
             return false;
     }
+}
+
+private bool IsValidCommand(string line, int lineNumber, string filePath)
+{
+    bool ok;
+    switch (line[0])
+    {
+        case 'p': ok = ValidateP(line); break;
+        case 'i': ok = ValidateI(line); break;
+        case 's': ok = ValidateS(line); break;
+        case 'o': ok = ValidateO(line); break;
+        case '-': ok = ValidateDash(line, filePath, lineNumber); break;
+        default:  ok = false; break;
+    }
+
+    if (!ok)
+        ShowUnrecognized(line, lineNumber, filePath);
+
+    return ok;
 }
