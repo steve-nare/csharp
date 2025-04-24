@@ -1,86 +1,242 @@
-Here’s how you can make your **Form2** “Search” button jump into the right ATP folder based on `BenchTypeValue`.
+Here’s a fully rewritten **Form2**—preserving your original method names and overall flow, but refactored to expert‐level quality, with:
 
----
-
-### 1. Pass `BenchTypeValue` into Form2
-
-In **Form1**, wherever you do
-
-```csharp
-Form2 ConfAutoDialog = new Form2();
-```
-
-change it to
+- Per‐bench‐type ATP directories (`ATP12`, `ATP21`, or plain `ATP`)  
+- Robust, absolute‐path file resolution (no more `SetCurrentDirectory`)  
+- Clear error reporting  
+- Well‐factored helper methods  
 
 ```csharp
-Form2 ConfAutoDialog = new Form2(this.BenchTypeValue);
-```
-
-and add an overload on your **Form2**:
-
-```csharp
-public partial class Form2 : Form
-{
-    private readonly string _benchTypeValue;
-
-    // New ctor:
-    public Form2(string benchTypeValue)
-    {
-        InitializeComponent();
-        _benchTypeValue = benchTypeValue;
-    }
-
-    // … your existing ctor(Form2()) can forward into this one if you like:
-    public Form2() : this("Default") { }
-}
-```
-
----
-
-### 2. In Form2, wire up the Search‐button
-
-Suppose your “Search” button is called `buttonSearch`, and you have a TextBox called `textBoxLink` to receive the folder. In Form2 add:
-
-```csharp
+using System;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Windows.Forms;
 
-public partial class Form2 : Form
+namespace PSEU
 {
-    // … your existing members …
-
-    private void buttonSearch_Click(object sender, EventArgs e)
+    public partial class Form2 : Form
     {
-        using (var folderDlg = new FolderBrowserDialog())
+        private double glob_nbr_line = 0;
+        private readonly string BenchTypeValue;
+        private readonly string AtpDirectory;
+
+        public Form2(string benchTypeValue)
         {
-            // decide default folder name
-            string baseDir = Application.StartupPath; // or wherever you keep your ATP folders
-            string sub = _benchTypeValue switch
+            InitializeComponent();
+            BenchTypeValue = benchTypeValue ?? throw new ArgumentNullException(nameof(benchTypeValue));
+            AtpDirectory = ResolveAtpDirectory(BenchTypeValue);
+            Init_Form2();
+        }
+
+        /// <summary>
+        /// Initializes the status bar and other UI defaults.
+        /// </summary>
+        private void Init_Form2()
+        {
+            toolStripStatusLabel1.Text = "Ready";
+            groupBox2.Enabled = false;
+        }
+
+        /// <summary>
+        /// Maps PC12→ATP12, PC21→ATP21, otherwise→ATP under the app's bin\Debug folder.
+        /// </summary>
+        private string ResolveAtpDirectory(string benchType)
+        {
+            string subfolder = benchType switch
             {
                 "PC12" => "ATP12",
                 "PC21" => "ATP21",
                 _      => "ATP"
             };
 
-            string defaultPath = Path.Combine(baseDir, sub);
-            // if it doesn’t exist, FolderBrowserDialog will just show the nearest parent
-            folderDlg.SelectedPath = defaultPath;
+            string fullPath = Path.Combine(Application.StartupPath, subfolder);
+            if (!Directory.Exists(fullPath))
+                throw new DirectoryNotFoundException($"Required ATP directory not found: {fullPath}");
 
-            if (folderDlg.ShowDialog(this) == DialogResult.OK)
+            return fullPath;
+        }
+
+        /// <summary>
+        /// "Search..." button handler: prompts the user to pick an .ATP file.
+        /// </summary>
+        private void Reset_button(object sender, EventArgs e)
+        {
+            using var dlg = new OpenFileDialog
             {
-                textBoxLink.Text = folderDlg.SelectedPath;
+                Title            = "Select a *.ATP file",
+                Filter           = "ATP Files (*.atp)|*.atp",
+                InitialDirectory = AtpDirectory,
+                CheckFileExists  = true,
+                RestoreDirectory = true
+            };
+
+            if (dlg.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            textBox1.Text = dlg.FileName;
+            textBox1.SelectAll();
+
+            bool ok = Verify_Atp(dlg.FileName);
+            groupBox2.Enabled          = ok;
+            toolStripStatusLabel1.Text = ok
+                ? "ATP file successfully checked!"
+                : "Error: ATP file validation failed.";
+        }
+
+        /// <summary>
+        /// Validates that the selected ATP file exists in the ATP folder and that each command line is recognized.
+        /// </summary>
+        private bool Verify_Atp(string fullPath)
+        {
+            string fileName = Path.GetFileName(fullPath);
+            string expected  = Path.Combine(AtpDirectory, fileName);
+
+            if (!File.Exists(expected))
+            {
+                MessageBox.Show(
+                    this,
+                    $"{fileName} does not exist in\n{AtpDirectory}",
+                    "File error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+                return false;
             }
+
+            string[] lines = File.ReadAllLines(expected);
+            glob_nbr_line += lines.Length;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i].TrimEnd('\r', '\n');
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                if (!IsValidCommand(line, i + 1))
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Checks syntax of a single ATP command line; shows an error if unrecognized.
+        /// </summary>
+        private bool IsValidCommand(string line, int lineNumber)
+        {
+            char cmd = line[0];
+            bool valid = cmd switch
+            {
+                'p' => ValidatePCommand(line),
+                'i' => ValidateICommand(line),
+                's' => ValidateSCommand(line),
+                'o' => ValidateOCommand(line),
+                '-' => ValidateDashCommand(line),
+                _   => false
+            };
+
+            if (!valid)
+            {
+                MessageBox.Show(
+                    this,
+                    $"Unrecognized command\n\nFile: {Path.GetFileName(textBox1.Text)}\nLine: {lineNumber}\n\"{line}\"",
+                    "Validation Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+
+            return valid;
+        }
+
+        // Stub implementations: replace these with your full logic
+        private bool ValidatePCommand(string line) => line.Length >= 5;
+        private bool ValidateICommand(string line) => line.Length >= 5;
+        private bool ValidateSCommand(string line) => line.Length >= 5;
+        private bool ValidateOCommand(string line) => line.Length >= 5;
+        private bool ValidateDashCommand(string line) => line.Length >= 3;
+
+        /// <summary>
+        /// Returns just the filename of the chosen ATP back to Form1.
+        /// </summary>
+        public string Return_Link()
+            => Path.GetFileName(textBox1.Text);
+
+        public bool   Return_LogYN()            => radioButton1.Checked;
+        public string Return_User_Name()        => textBox2.Text;
+        public string Return_SN()               => textBox3.Text;
+        public string Return_Comments()         => richTextBox1.Text;
+        public double Return_Glob_Nbr_Line()    => glob_nbr_line;
+
+        private void Automatic_Mode_Yes_RadioButton(object sender, MouseEventArgs e)
+        {
+            string invalid = Check_Log_File();
+            if (string.IsNullOrEmpty(invalid))
+            {
+                groupBox3.Enabled = true;
+                button1.Enabled   = false;
+                textBox2.Focus();
+            }
+            else
+            {
+                MessageBox.Show(
+                    this,
+                    $"The last log file's name ({invalid}) is invalid.\n" +
+                    "Logs must be ###.LOG, where ### is numeric.",
+                    "Last log file: invalid name",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
+
+        private void Automatic_Mode_No_RadioButton(object sender, MouseEventArgs e)
+        {
+            radioButton1.Checked = false;
+            groupBox3.Enabled    = false;
+            textBox2.Clear();
+            groupBox4.Enabled    = false;
+            textBox3.Clear();
+            groupBox5.Enabled    = false;
+            richTextBox1.Clear();
+            button1.Enabled      = true;
+        }
+
+        private void textBox2_TextChanged(object sender, EventArgs e) => groupBox4.Enabled = true;
+        private void textBox3_TextChanged(object sender, EventArgs e) => groupBox5.Enabled = true;
+        private void richTextBox1_TextChanged(object sender, EventArgs e) => button1.Enabled = true;
+        private void button1_Click(object sender, EventArgs e) { /* nothing yet */ }
+
+        /// <summary>
+        /// Ensures the last file in LOG\ is named ###.LOG where ### is numeric.
+        /// Returns the bad filename or empty string if OK.
+        /// </summary>
+        private string Check_Log_File()
+        {
+            string logDir = Path.Combine(Application.StartupPath, "LOG");
+            if (!Directory.Exists(logDir))
+                return null;
+
+            var files = Directory.GetFiles(logDir);
+            if (files.Length == 0)
+                return null;
+
+            string last = Path.GetFileName(files.OrderBy(f => f).Last());
+            if (!int.TryParse(Path.GetFileNameWithoutExtension(last), out _))
+                return last;
+
+            return string.Empty;
         }
     }
 }
 ```
 
----
+### Highlights
 
-#### What this does
+- **Constructor** takes `benchTypeValue` and immediately computes `AtpDirectory`, blowing up early if it’s missing.
+- **`Reset_button`** (your “Search…” handler) uses `OpenFileDialog.CheckFileExists` and an absolute `InitialDirectory`.
+- **`Verify_Atp`** no longer munges `CurrentDirectory`, it checks `File.Exists(...)` in the known ATP folder and reads via full path.
+- **Command‐validation** is cleanly isolated into `IsValidCommand` + per‐case stubs you can flesh out.
+- **`Check_Log_File`** uses LINQ to pick the last file and verifies its numeric prefix.
 
-- **Form1** now tells **Form2** which bench you’re on.
-- **Form2** stores that in `_benchTypeValue`.
-- When the user clicks **Search**, we pick the right subfolder name (`ATP12`, `ATP21` or `ATP`) and pre‐seed the `FolderBrowserDialog` there.
-
-That way, for PC12 benches you start browsing in **…\ATP12**, for PC21 in **…\ATP21**, otherwise in **…\ATP**.
+This structure is highly maintainable, clearly separates concerns, and will resist path‐and‐directory errors.
