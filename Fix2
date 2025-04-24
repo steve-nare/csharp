@@ -1,39 +1,46 @@
-private bool ValidateP(string line)
+private bool ValidateS(string line)
 {
-    // pX:Y or pX Y  where X∈{1,2}, Y∈{0,1}
-    var parts = line.Substring(1).Split(new[] {':', ' '}, StringSplitOptions.RemoveEmptyEntries);
+    // sN:v or sN v, or sNN:v or sNN v, where 1 ≤ N ≤ 24 and v ∈ {f,n,m,o,s}
+    var parts = line.Substring(1)
+                     .Split(new[] {':',' '}, StringSplitOptions.RemoveEmptyEntries);
     if (parts.Length != 2) return false;
-    if (!int.TryParse(parts[0], out var ios) || !int.TryParse(parts[1], out var val))
-        return false;
-    return (ios == 1 || ios == 2) && (val == 0 || val == 1);
+
+    if (!int.TryParse(parts[0], out var ios)) return false;
+    char v = parts[1].Length > 0 ? parts[1][0] : '\0';
+
+    return ios >= 1 && ios <= 24
+        && "fnmos".Contains(v);
 }
 
-private bool ValidateI(string line)
+private bool ValidateO(string line)
 {
-    // iN:Y or iN Y  or iNN:Y or iNN Y, where 1 ≤ N ≤ 18, Y∈{0,1}
-    var parts = line.Substring(1).Split(new[] {':', ' '}, StringSplitOptions.RemoveEmptyEntries);
+    // oN:v or oN v, or oNN:v or oNN v, where 1 ≤ N ≤ 46 and v ∈ {l,o,s}
+    var parts = line.Substring(1)
+                     .Split(new[] {':',' '}, StringSplitOptions.RemoveEmptyEntries);
     if (parts.Length != 2) return false;
-    if (!int.TryParse(parts[0], out var ios) || !int.TryParse(parts[1], out var val))
-        return false;
-    return ios >= 1 && ios <= 18 && (val == 0 || val == 1);
+
+    if (!int.TryParse(parts[0], out var ios)) return false;
+    char v = parts[1].Length > 0 ? parts[1][0] : '\0';
+
+    return ios >= 1 && ios <= 46
+        && "los".Contains(v);
 }
 
 private bool ValidateDash(string line, string filePath, int lineNumber)
 {
-    // -r, -g <name>, -|, -*, -p, -w <ms>, -c
+    // –r, –g <name>, –|, –*, –p, –w <ms>, –c...
     if (line.Length < 2) return false;
-    switch (line[1])
+    char sub = line[1];
+    switch (sub)
     {
         case 'r': 
             return true;
         case 'g':
-            // expect "-g<sep><filename-without-.ATP>"
+            // allow "-g78G002-2" or "-g 78G002-2"
             var tok = line.Substring(2).Trim();
-            if (tok.Length == 0) return false;
-            // allow leading space
-            var name = tok.TrimStart(' ', '\t') + ".ATP";
-            // verify include
-            return Verify_Atp(Path.Combine(AtpDirectory, name));
+            if (string.IsNullOrEmpty(tok)) return false;
+            var includeFile = tok + ".ATP";
+            return Verify_Atp(Path.Combine(AtpDirectory, includeFile));
         case '|':
         case '*':
         case 'p':
