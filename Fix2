@@ -1,55 +1,54 @@
-private bool ValidateS(string line)
-{
-    // sN:v or sN v, or sNN:v or sNN v, where 1 ≤ N ≤ 24 and v ∈ {f,n,m,o,s}
-    var parts = line.Substring(1)
-                     .Split(new[] {':',' '}, StringSplitOptions.RemoveEmptyEntries);
-    if (parts.Length != 2) return false;
-
-    if (!int.TryParse(parts[0], out var ios)) return false;
-    char v = parts[1].Length > 0 ? parts[1][0] : '\0';
-
-    return ios >= 1 && ios <= 24
-        && "fnmos".Contains(v);
-}
-
-private bool ValidateO(string line)
-{
-    // oN:v or oN v, or oNN:v or oNN v, where 1 ≤ N ≤ 46 and v ∈ {l,o,s}
-    var parts = line.Substring(1)
-                     .Split(new[] {':',' '}, StringSplitOptions.RemoveEmptyEntries);
-    if (parts.Length != 2) return false;
-
-    if (!int.TryParse(parts[0], out var ios)) return false;
-    char v = parts[1].Length > 0 ? parts[1][0] : '\0';
-
-    return ios >= 1 && ios <= 46
-        && "los".Contains(v);
-}
-
 private bool ValidateDash(string line, string filePath, int lineNumber)
 {
-    // –r, –g <name>, –|, –*, –p, –w <ms>, –c...
-    if (line.Length < 2) return false;
+    // must start with "-x"
+    if (line.Length < 2 || line[0] != '-') return false;
+
     char sub = line[1];
     switch (sub)
     {
-        case 'r': 
-            return true;
-        case 'g':
-            // allow "-g78G002-2" or "-g 78G002-2"
-            var tok = line.Substring(2).Trim();
-            if (string.IsNullOrEmpty(tok)) return false;
-            var includeFile = tok + ".ATP";
-            return Verify_Atp(Path.Combine(AtpDirectory, includeFile));
-        case '|':
-        case '*':
-        case 'p':
-            return line.Length >= 3;
-        case 'w':
-            var num = line.Substring(2).Trim();
-            return int.TryParse(num, out _);
+        // ... your existing cases for r, g, w, etc. ...
+
         case 'c':
-            return true;
+            // format: -c <ioType> <chan> <value>
+            // e.g. "-c o 14 1"
+            var parts = line.Substring(2)
+                            .Trim()
+                            .Split(new[]{' '}, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 3)
+                return false;
+
+            // 1) ioType must be one of p,i,s,o
+            char ioType = parts[0].ToLowerInvariant()[0];
+            if ("piso".IndexOf(ioType) < 0)
+                return false;
+
+            // 2) parse channel number
+            if (!int.TryParse(parts[1], out int ch))
+                return false;
+
+            // decide limits based on bench type
+            bool isPCx = BenchTypeValue == "PC12" || BenchTypeValue == "PC21";
+            int maxChan = ioType switch
+            {
+                'o' => isPCx ? 11 : 48,   // outputs
+                'i' => isPCx ? 12 : 18,   // inputs
+                's' => isPCx ? 18 : 24,   // sensors/LLS
+                'p' =>  2,                // bench supplies p1/p2
+                _   =>  0
+            };
+            if (ch < 1 || ch > maxChan)
+                return false;
+
+            // 3) parse expected value
+            string val = parts[2];
+            bool okVal = ioType switch
+            {
+                'o' or 'i' or 'p' => (val == "0" || val == "1"),
+                's'              => (val.Length == 1 && "fnmos".Contains(val)),
+                _                => false
+            };
+            return okVal;
+
         default:
             return false;
     }
