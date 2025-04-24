@@ -1,74 +1,97 @@
 private bool ValidateDash(string line, string filePath, int lineNumber)
 {
-    // line must start with "-x …"
+    // must start with '-' and have at least one more char
     if (string.IsNullOrWhiteSpace(line) || line.Length < 2 || line[0] != '-')
         return false;
 
     char sub = line[1];
-    // only handle '-c' here; all other '-' commands use your existing logic
-    if (sub != 'c')
-        return ValidateOtherDashCommands(line, filePath, lineNumber);
-
-    // everything after "-c"
-    string rest = line.Substring(2).Trim();
-    var parts = rest.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-    if (parts.Length != 3)
-        return false;
-
-    // 1) ioType must be single char p|i|s|o
-    string ioTypeStr = parts[0];
-    if (ioTypeStr.Length != 1)
-        return false;
-    char ioType = char.ToLowerInvariant(ioTypeStr[0]);
-    if ("piso".IndexOf(ioType) < 0)
-        return false;
-
-    // 2) channel number
-    if (!int.TryParse(parts[1], out int ch))
-        return false;
-
-    // pick limits based on bench type
-    bool isPCx = BenchTypeValue == "PC12" || BenchTypeValue == "PC21";
-    int maxChan;
-    switch (ioType)
+    // handle generic dash-commands first
+    switch (sub)
     {
-        case 'o': maxChan = isPCx ? 11 : 48; break;  // outputs
-        case 'i': maxChan = isPCx ? 12 : 18; break;  // inputs
-        case 's': maxChan = isPCx ? 18 : 24; break;  // sensors (LLS)
-        case 'p': maxChan = 2;            break;     // bench supplies p1/p2
-        default:  return false;
-    }
-    if (ch < 1 || ch > maxChan)
-        return false;
+        case 'r':
+            // reset: always valid
+            return true;
 
-    // 3) terminal value
-    string val = parts[2];
-    bool okVal;
-    switch (ioType)
-    {
-        case 'o':
-        case 'i':
+        case 'g':
+            // include another ATP: "-g XXX"
+            if (line.Length < 5) return false;
+            {
+                // extract filename (skip "-g ")
+                string name = line.Substring(3).Trim() + ".ATP";
+                string full = Path.Combine(AtpDirectory, name);
+                if (!Verify_Atp(full))
+                    return false;
+            }
+            return true;
+
+        case '|':
+            // comment to show in label: requires at least three chars ("-| ")
+            return line.Length >= 5;
+
+        case '*':
+            // general comment: always valid
+            return true;
+
         case 'p':
-            // only 0 or 1 allowed
-            okVal = (val == "0" || val == "1");
-            break;
-        case 's':
-            // only single-letter f, n, m, o or s
-            okVal = (val.Length == 1 && "fnmos".IndexOf(val[0]) >= 0);
-            break;
+            // pause prompt: "-p X Y"
+            return line.Length >= 5;
+
+        case 'w':
+            // wait: "-w NNN"
+            if (line.Length < 5) return false;
+            string num = line.Substring(3).Trim();
+            return int.TryParse(num, out _);
+
+        case 'c':
+            // ---- BEGIN your new check logic for "-c" ----
+
+            // split into three tokens: ioType, channel, value
+            var parts = line.Substring(2)
+                             .Trim()
+                             .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 3)
+                return false;
+
+            // 1) ioType (p|i|s|o)
+            if (parts[0].Length != 1) 
+                return false;
+            char ioType = char.ToLowerInvariant(parts[0][0]);
+            if ("piso".IndexOf(ioType) < 0)
+                return false;
+
+            // 2) channel number
+            if (!int.TryParse(parts[1], out int ch))
+                return false;
+
+            bool isPCx = BenchTypeValue == "PC12" || BenchTypeValue == "PC21";
+            int maxChan;
+            switch (ioType)
+            {
+                case 'o': maxChan = isPCx ? 11 : 48; break;
+                case 'i': maxChan = isPCx ? 12 : 18; break;
+                case 's': maxChan = isPCx ? 18 : 24; break;
+                case 'p': maxChan = 2;                break;
+                default:  return false;
+            }
+            if (ch < 1 || ch > maxChan)
+                return false;
+
+            // 3) value  
+            string val = parts[2];
+            bool okVal = ioType switch
+            {
+                's' => (val.Length == 1 && "fnmos".Contains(val[0])),
+                _   => (val == "0" || val == "1")
+            };
+            if (!okVal)
+            {
+                ShowUnrecognized(line, lineNumber, filePath);
+            }
+
+            return okVal;
+        // ---- END "-c" logic ----
+
         default:
-            okVal = false;
-            break;
+            return false;
     }
-
-    if (!okVal)
-        MessageBox.Show(
-            this,
-            $"Unrecognized check command\n\nFile: {Path.GetFileName(filePath)}\nLine: {lineNumber}\n\"{line}\"",
-            "Validation Error",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Error
-        );
-
-    return okVal;
 }
