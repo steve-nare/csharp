@@ -1,12 +1,10 @@
-using System.IO;
-using System.Text.RegularExpressions;
-using System.Windows.Forms;
-
-…
-
 private bool ValidateDash(string line, string filePath, int lineNumber)
 {
-    // Remove the leading '-' and split on spaces
+    // Any "-|" at the very start is a comment—accept it.
+    if (line.StartsWith("-|", StringComparison.Ordinal))
+        return true;
+
+    // Otherwise strip the leading "-" and split on spaces
     var tokens = line.Substring(1)
                      .Trim()
                      .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
@@ -17,24 +15,19 @@ private bool ValidateDash(string line, string filePath, int lineNumber)
     switch (tokens[0])
     {
         case "r":
-            // "-r" with no further args
             return tokens.Length == 1;
 
         case "g":
-            // "-g <basename>"  ⇒ find <basename>.ATP in your AtpDirectory
-            if (tokens.Length != 2)
-                return false;
-
-            var atpName = tokens[1].EndsWith(".ATP", StringComparison.OrdinalIgnoreCase)
-                ? tokens[1]
-                : tokens[1] + ".ATP";
-
-            var full = Path.Combine(AtpDirectory, atpName);
+            if (tokens.Length != 2) return false;
+            var atp = tokens[1].EndsWith(".ATP", StringComparison.OrdinalIgnoreCase)
+                      ? tokens[1]
+                      : tokens[1] + ".ATP";
+            var full = Path.Combine(AtpDirectory, atp);
             if (!File.Exists(full))
             {
                 MessageBox.Show(
                     this,
-                    $"{atpName} not found in {AtpDirectory}",
+                    $"{atp} not found in {AtpDirectory}",
                     "Include File Missing",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
@@ -43,59 +36,25 @@ private bool ValidateDash(string line, string filePath, int lineNumber)
             }
             return true;
 
-        case "|":
-            // "-| <some comment>"
-            return tokens.Length >= 2;
-
         case "*":
-            // "-* ..." comment
             return true;
 
         case "p":
-            // "-p ..." pause/comment
             return tokens.Length >= 2;
 
         case "w":
-            // "-w <milliseconds>"
-            if (tokens.Length != 2)
-                return false;
+            if (tokens.Length != 2) return false;
             return int.TryParse(tokens[1], out _);
 
         case "c":
-            // "-c <iosId> <0|1>"
-            if (tokens.Length != 3)
-                return false;
-
-            // tokens[1] e.g. "o1", "i9", "s13"
+            if (tokens.Length != 3) return false;
             if (!Regex.IsMatch(tokens[1], @"^[ois]\d{1,2}$"))
                 return false;
-
-            // tokens[2] must be '0' or '1'
             if (!int.TryParse(tokens[2], out var v) || (v != 0 && v != 1))
                 return false;
-
             return true;
 
         default:
             return false;
     }
-}
-
-private bool IsValidCommand(string line, int lineNumber, string filePath)
-{
-    bool ok;
-    switch (line[0])
-    {
-        case 'p': ok = ValidateP(line); break;
-        case 'i': ok = ValidateI(line); break;
-        case 's': ok = ValidateS(line); break;
-        case 'o': ok = ValidateO(line); break;
-        case '-': ok = ValidateDash(line, filePath, lineNumber); break;
-        default:  ok = false; break;
-    }
-
-    if (!ok)
-        ShowUnrecognized(line, lineNumber, filePath);
-
-    return ok;
 }
