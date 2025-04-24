@@ -1,20 +1,49 @@
-private bool ValidateI(string line)
+private bool ValidateP(string line)
 {
-    // Must start with 'i'
-    if (line.Length < 3 || line[0] != 'i')
-        return false;
-
-    // Split off the leading 'i'
-    string payload = line.Substring(1).Trim();
-    // Allow either ':' or any whitespace as the separator
-    var parts = payload.Split(new[] { ':', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-    if (parts.Length != 2)
-        return false;
-
-    // Parse IOS number and value
+    // pX:Y or pX Y  where X∈{1,2}, Y∈{0,1}
+    var parts = line.Substring(1).Split(new[] {':', ' '}, StringSplitOptions.RemoveEmptyEntries);
+    if (parts.Length != 2) return false;
     if (!int.TryParse(parts[0], out var ios) || !int.TryParse(parts[1], out var val))
         return false;
+    return (ios == 1 || ios == 2) && (val == 0 || val == 1);
+}
 
-    // IOS 1–18, value 0 or 1
+private bool ValidateI(string line)
+{
+    // iN:Y or iN Y  or iNN:Y or iNN Y, where 1 ≤ N ≤ 18, Y∈{0,1}
+    var parts = line.Substring(1).Split(new[] {':', ' '}, StringSplitOptions.RemoveEmptyEntries);
+    if (parts.Length != 2) return false;
+    if (!int.TryParse(parts[0], out var ios) || !int.TryParse(parts[1], out var val))
+        return false;
     return ios >= 1 && ios <= 18 && (val == 0 || val == 1);
+}
+
+private bool ValidateDash(string line, string filePath, int lineNumber)
+{
+    // -r, -g <name>, -|, -*, -p, -w <ms>, -c
+    if (line.Length < 2) return false;
+    switch (line[1])
+    {
+        case 'r': 
+            return true;
+        case 'g':
+            // expect "-g<sep><filename-without-.ATP>"
+            var tok = line.Substring(2).Trim();
+            if (tok.Length == 0) return false;
+            // allow leading space
+            var name = tok.TrimStart(' ', '\t') + ".ATP";
+            // verify include
+            return Verify_Atp(Path.Combine(AtpDirectory, name));
+        case '|':
+        case '*':
+        case 'p':
+            return line.Length >= 3;
+        case 'w':
+            var num = line.Substring(2).Trim();
+            return int.TryParse(num, out _);
+        case 'c':
+            return true;
+        default:
+            return false;
+    }
 }
