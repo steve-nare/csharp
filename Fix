@@ -1,144 +1,109 @@
-Here are the two root causes and the corresponding fixes:
+Below is a revised **Form2** that:
+
+1. Takes your `BenchTypeValue` from **Form1** so it knows which ATP sub-folder to open.  
+2. Points the **OpenFileDialog** at `…\bin\Debug\<ATP12|ATP21|ATP>` instead of lumping everything under `ATP`.  
+3. Stops trying to hack `Directory.SetCurrentDirectory` and the hand-rolled “is-in-this-folder” routine in `Verify_Atp`, and just uses `File.Exists(...)` on the absolute path the user picked.
 
 ---
 
-## 1) `ArgumentOutOfRangeException` in **Init_F_INPUT_Cells** (your “panel 6” grid)
-
-> **What’s happening:**  
-> You loop over `i < force_input` (12 or 18) and write into  
-> ```csharp
-> dataGridView6.Rows[i/16].Cells[i%16]
-> ```  
-> but by default your grid has **zero** real rows, so as soon as `i/16` becomes 1 (i.e. at `i=16` for C27‑J where `force_input=18`), `Rows[1]` is out of range.
-
-> **The fix:**  
-> Before you start filling cells, make sure the grid has exactly as many rows as you need.  Insert this at the top of your `Init_F_INPUT_Cells()`:
-
 ```csharp
-public void Init_F_INPUT_Cells()
+using System;
+using System.IO;
+using System.Text;
+using System.Windows.Forms;
+
+namespace PSEU
 {
-    string cells_content;
-    UInt16 force_input;
-
-    if (BenchTypeValue == "PC21" || BenchTypeValue == "PC12")
-        force_input = 12;
-    else
-        force_input = 18;
-
-    // ── NEW: ensure the grid has enough rows ───────────────
-    int cols = dataGridView6.ColumnCount;
-    int neededRows = (force_input + cols - 1) / cols;
-    dataGridView6.Rows.Clear();
-    for (int r = 0; r < neededRows; r++)
-        dataGridView6.Rows.Add();
-    // ────────────────────────────────────────────────────────
-
-    for (int i = 0; i < force_input; i++)
+    public partial class Form2 : Form
     {
-        cells_content = "I";
-        if (i < 9) cells_content += "0";
-        cells_content += (i + 1) + ":OFF";
-        dataGridView6.Rows[i / cols].Cells[i % cols].Value = cells_content;
+        private readonly string _benchTypeValue;
+        private readonly string _atpRoot;
 
-        dataGridView6.DefaultCellStyle.SelectionBackColor = Color.White;
-        dataGridView6.Rows[i / cols].Cells[i % cols].Style.BackColor = Color.White;
+        public Form2(string benchTypeValue)
+        {
+            InitializeComponent();
+            _benchTypeValue = benchTypeValue;
+            // decide which subfolder under Debug you want:
+            var sub = benchTypeValue switch
+            {
+                "PC12" => "ATP12",
+                "PC21" => "ATP21",
+                _      => "ATP"
+            };
+            // Application.StartupPath is …\PSEU\bin\Debug
+            _atpRoot = Path.Combine(Application.StartupPath, sub);
+
+            toolStripStatusLabel1.Text = "Ready";
+        }
+
+        private void buttonSearch_Click(object sender, EventArgs e)
+        {
+            using var dlg = new OpenFileDialog();
+            dlg.Filter = "ATP Files|*.atp";
+            dlg.Title = "Select an *.ATP file";
+            dlg.InitialDirectory = _atpRoot;
+
+            if (dlg.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            var link = dlg.FileName;
+            textBox1.Text = link;
+            textBox1.SelectAll();
+
+            if (Verify_Atp(link))
+            {
+                groupBox2.Enabled = true;
+                toolStripStatusLabel1.Text = "ATP file successfully checked!";
+            }
+            else
+            {
+                groupBox2.Enabled = false;
+                toolStripStatusLabel1.Text = "Error: ATP file invalid or not found!";
+            }
+        }
+
+        private bool Verify_Atp(string link)
+        {
+            // just check that the file the user picked really exists
+            if (!File.Exists(link))
+            {
+                MessageBox.Show($"File '{link}' does not exist!", "File error",
+                                MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+
+            // now you can open it and parse it exactly as before:
+            using var mainATPfile = new StreamReader(link);
+            var content = mainATPfile.ReadToEnd().Split('\n');
+            glob_nbr_line += content.Length;
+            // … the rest of your parsing logic here …
+
+            return true;
+        }
+
+        // … the rest of Form2 …
     }
 }
 ```
 
 ---
 
-## 2) `NullReferenceException` in **Color_Cells** (your “monitor” grids 2 and 3)
+### Why you saw “does not exist!” before
 
-> **What’s happening:**  
-> In `Color_Cells()` you do
-> ```csharp
-> var cur_cont = dataGridView2.Rows[i/16].Cells[i%16].Value.ToString();
-> ```
-> but for PC‑12 and PC‑21 you never pre‑populate any cell values, so `Value` is `null` → `.ToString()` blows up.
-
-> **Two ways to fix it** (pick one, or both):
-
-### A) Pre‑fill every cell with a non‑null default right after the form loads
-
-In your `Form1_Load` (before you ever call `Display_feedback()`), add something like:
+Your original code was doing:
 
 ```csharp
-private void Form1_Load(object sender, EventArgs e)
-{
-    // … your existing board‑init code …
-
-    // ── NEW: size & seed grid2 (inputs) and grid3 (sensors) ─────────
-    UInt16 ctrlIn  = (BenchTypeValue == "PC21" || BenchTypeValue == "PC12") ? (UInt16)12 : (UInt16)18;
-    UInt16 ctrlOut = (BenchTypeValue == "PC21" || BenchTypeValue == "PC12") ? (UInt16)11 : (UInt16)48;
-
-    void InitGrid(DataGridView dgv, int count)
-    {
-        int cols = dgv.ColumnCount;
-        int rows = (count + cols - 1) / cols;
-        dgv.Rows.Clear();
-        for (int r = 0; r < rows; r++)
-            dgv.Rows.Add();
-        for (int i = 0; i < count; i++)
-            dgv.Rows[i / cols].Cells[i % cols].Value = "0";  // default “off”
-    }
-
-    InitGrid(dataGridView2, ctrlIn);
-    InitGrid(dataGridView3, ctrlOut);
-    // ──────────────────────────────────────────────────────────────────
-
-    // now your existing sw.Reset(); sw.Start(); … Display_feedback()
-}
+Directory.SetCurrentDirectory("./ATP");
+// …
+Verify_Atp(link)
 ```
 
-### B) Null‑check in **Color_Cells** itself
-
-Right at the top of your `Color_Cells()` replace
+then inside `Verify_Atp` you did
 
 ```csharp
-cur_cont = dataGridView2.Rows[i/16].Cells[i%16].Value.ToString();
+Directory.GetFiles(Directory.GetCurrentDirectory())
 ```
 
-with
+which only listed the files directly under `…\bin\Debug\ATP` (and **not** anything in sub-folders like `ATP\C27-J\…`). Since your file actually lived in `ATP\C27-J\…`, your home-grown routine never saw it and reported “does not exist.”
 
-```csharp
-var raw = dataGridView2.Rows[i/16].Cells[i%16].Value;
-string cur_cont = raw != null ? raw.ToString() : "";
-```
-
-(and do the same for the `dataGridView3` block).
-
----
-
-## 3) Bonus: stop your timer when the form closes
-
-Because you have a `timer_feedback` that keeps ticking (and calling `Display_feedback`) even after you hit the “X”, it can trigger UI‑updates on a disposed form.  To prevent **any** funny business on close, add to your **Form1** constructor:
-
-```csharp
-public Form1(string BenchTypeValue)
-{
-    InitializeComponent();
-    this.FormClosing += Form1_FormClosing;
-    Init_Values(BenchTypeValue);
-    // …
-}
-
-private void Form1_FormClosing(object sender, FormClosingEventArgs e)
-{
-    timer_feedback.Enabled = false;
-    if (disp_fdbk != null && disp_fdbk.IsAlive)
-        disp_fdbk.Join();
-}
-```
-
-This ensures that as soon as you close Form1 your background thread and timer stop, and nothing will try to re‑draw the grids on a form that’s gone.
-
----
-
-### Summary
-
-- **Grow the rows** of **all** your DataGridViews before you write into them (that fixes the out‑of‑range).  
-- **Seed every cell’s `.Value`** with something non‑null (or guard against `null` in your color logic) to avoid the `NullReferenceException`.  
-- **Turn off** your `timer_feedback` (and join your feedback‐thread) on FormClosing so that no more UI callbacks fire once the form is gone.  
-
-With those three changes in place, you’ll be able to open **Form1** for any bench type, close it cleanly (and return to **Form4**), and never see either the index‐out‐of‐range or null‐reference errors again.
+By giving the dialog an **absolute** `InitialDirectory` and then simply `File.Exists(link)`, you avoid all of that relative-path confusion and ensure that what the user picks is exactly what you check.
