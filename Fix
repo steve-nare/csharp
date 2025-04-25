@@ -1,109 +1,32 @@
-Below is a revised **Form2** that:
+if (str[i].Length > j && str[i][j] == 'o')
+                        {
+                            // either one- or two-digit
+                            if (str[i].Length >= j+4 && str[i][j+2] == ' ')
+                            {
+                                // single-digit, e.g. "o1 0"
+                                num_IOS = str[i][j+1] - '0';
+                                value   = str[i][j+3] - '0';
+                            }
+                            else
+                            {
+                                // two-digit, e.g. "o14 1"
+                                num_IOS = (str[i][j+1] - '0') * 10 + (str[i][j+2] - '0');
+                                value   = str[i][j+4] - '0';
+                            }
 
-1. Takes your `BenchTypeValue` from **Form1** so it knows which ATP sub-folder to open.  
-2. Points the **OpenFileDialog** at `…\bin\Debug\<ATP12|ATP21|ATP>` instead of lumping everything under `ATP`.  
-3. Stops trying to hack `Directory.SetCurrentDirectory` and the hand-rolled “is-in-this-folder” routine in `Verify_Atp`, and just uses `File.Exists(...)` on the absolute path the user picked.
+                            bool actual = frm1.outp[num_IOS - 1];
+                            bool wanted = (value == 1);
 
----
-
-```csharp
-using System;
-using System.IO;
-using System.Text;
-using System.Windows.Forms;
-
-namespace PSEU
-{
-    public partial class Form2 : Form
-    {
-        private readonly string _benchTypeValue;
-        private readonly string _atpRoot;
-
-        public Form2(string benchTypeValue)
-        {
-            InitializeComponent();
-            _benchTypeValue = benchTypeValue;
-            // decide which subfolder under Debug you want:
-            var sub = benchTypeValue switch
-            {
-                "PC12" => "ATP12",
-                "PC21" => "ATP21",
-                _      => "ATP"
-            };
-            // Application.StartupPath is …\PSEU\bin\Debug
-            _atpRoot = Path.Combine(Application.StartupPath, sub);
-
-            toolStripStatusLabel1.Text = "Ready";
-        }
-
-        private void buttonSearch_Click(object sender, EventArgs e)
-        {
-            using var dlg = new OpenFileDialog();
-            dlg.Filter = "ATP Files|*.atp";
-            dlg.Title = "Select an *.ATP file";
-            dlg.InitialDirectory = _atpRoot;
-
-            if (dlg.ShowDialog(this) != DialogResult.OK)
-                return;
-
-            var link = dlg.FileName;
-            textBox1.Text = link;
-            textBox1.SelectAll();
-
-            if (Verify_Atp(link))
-            {
-                groupBox2.Enabled = true;
-                toolStripStatusLabel1.Text = "ATP file successfully checked!";
-            }
-            else
-            {
-                groupBox2.Enabled = false;
-                toolStripStatusLabel1.Text = "Error: ATP file invalid or not found!";
-            }
-        }
-
-        private bool Verify_Atp(string link)
-        {
-            // just check that the file the user picked really exists
-            if (!File.Exists(link))
-            {
-                MessageBox.Show($"File '{link}' does not exist!", "File error",
-                                MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return false;
-            }
-
-            // now you can open it and parse it exactly as before:
-            using var mainATPfile = new StreamReader(link);
-            var content = mainATPfile.ReadToEnd().Split('\n');
-            glob_nbr_line += content.Length;
-            // … the rest of your parsing logic here …
-
-            return true;
-        }
-
-        // … the rest of Form2 …
-    }
-}
-```
-
----
-
-### Why you saw “does not exist!” before
-
-Your original code was doing:
-
-```csharp
-Directory.SetCurrentDirectory("./ATP");
-// …
-Verify_Atp(link)
-```
-
-then inside `Verify_Atp` you did
-
-```csharp
-Directory.GetFiles(Directory.GetCurrentDirectory())
-```
-
-which only listed the files directly under `…\bin\Debug\ATP` (and **not** anything in sub-folders like `ATP\C27-J\…`). Since your file actually lived in `ATP\C27-J\…`, your home-grown routine never saw it and reported “does not exist.”
-
-By giving the dialog an **absolute** `InitialDirectory` and then simply `File.Exists(link)`, you avoid all of that relative-path confusion and ensure that what the user picks is exactly what you check.
+                            if (actual != wanted)
+                            {
+                                fail = true;
+                                var msg = $"Test failed while calling this command line (this is not a syntax error):\n" +
+                                          $"{str[i]} ({link} > line {i+1})\n\nContinue anyway?";
+                                if (MessageBox.Show(msg, "Test failed!", MessageBoxButtons.YesNo, MessageBoxIcon.Error)
+                                        != DialogResult.Yes)
+                                {
+                                    return false;
+                                }
+                                log_content += $"\r\n>>> Test failed with \"{str[i]}\" ({link} > line {i+1}) <<<\r\n\r\n";
+                            }
+                        }
