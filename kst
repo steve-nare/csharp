@@ -1,6 +1,10 @@
+i got an error on this command -c o5 1 
+
+based on this code can you fix it
+
 using System;
 using System.Diagnostics;       // pour Stopwatch
-using System.IO;               /*Gestion des fichiers*/
+using System.IO;                // Gestion des fichiers
 using System.Threading;
 using System.Windows.Forms;
 using System.Text;
@@ -55,6 +59,17 @@ namespace PSEU
             toolStripStatusLabel1.Text = "Ready";
         }
 
+        private string ResolveAtpDirectory(string benchType)
+        {
+            string subfolder = benchType switch
+            {
+                "PC12" => "ATP12",
+                "PC21" => "ATP21",
+                _ => "ATP"
+            };
+            return subfolder;
+        }
+
         private void GoTransparent(object sender, EventArgs e)
         {
             this.Opacity = 1;
@@ -84,6 +99,7 @@ namespace PSEU
 
         private void Begin_Process()
         {
+            string benchtype = frm1.BenchTypeValue;
             string date_start = DateTime.Now.ToString();
             bool success;
 
@@ -98,7 +114,7 @@ namespace PSEU
             SetProgress(percent);
 
             toolStripStatusLabel1.Text = "Running ATP...";
-            Directory.SetCurrentDirectory("./ATP");
+            Directory.SetCurrentDirectory(ResolveAtpDirectory(benchtype));
             success = Start_Commands(link);
             Directory.SetCurrentDirectory("..");
 
@@ -119,6 +135,7 @@ namespace PSEU
             using var mainATPfile = new StreamReader(link);
             var lines = mainATPfile.ReadToEnd().Split('\n');
             int nbr_lines = lines.Length;
+            // ensure trailing CRLF
             lines[nbr_lines - 1] += "\r\n";
 
             for (int i = 0; i < nbr_lines; i++)
@@ -145,29 +162,21 @@ namespace PSEU
                     return false;
                 }
 
-                // determine start of args
+                // determine argument start
                 int j = (line.Length >= 3 && line[2] == ' ') ? 3 : 2;
 
                 switch (line[0])
                 {
-                    case 'p':
-                        HandleP(line);
-                        break;
-                    case 'i':
-                        HandleI(line);
-                        break;
-                    case 's':
-                        HandleS(line);
-                        break;
-                    case 'o':
-                        HandleO(line);
-                        break;
+                    case 'p': HandleP(line); break;
+                    case 'i': HandleI(line); break;
+                    case 's': HandleS(line); break;
+                    case 'o': HandleO(line); break;
                     case '-':
                         if (!HandleDash(line, j, link, i + 1))
                             return false;
                         break;
                     default:
-                        // ignore blank or unhandled
+                        // ignore blanks or unrecognized leading char
                         break;
                 }
             }
@@ -184,13 +193,13 @@ namespace PSEU
             if (num_IOS == 1)
             {
                 frm1.alim1 = (value == 1);
-                frm1.Send_Address(value == 1 ? "0" : "1", 16 + 2);
+                frm1.Send_Address(value == 1 ? "0" : "1", 18);
                 DelayMicro(10000);
             }
             else if (num_IOS == 2)
             {
                 frm1.alim2 = (value == 1);
-                frm1.Send_Address(value == 1 ? "0" : "1", 16 + 3);
+                frm1.Send_Address(value == 1 ? "0" : "1", 19);
                 DelayMicro(10000);
             }
         }
@@ -208,7 +217,6 @@ namespace PSEU
                 num_IOS = (line[1] - '0') * 10 + (line[2] - '0');
                 value = line[4] - '0';
             }
-
             frm1.Disp_force('i', num_IOS, value.ToString());
             frm1.Cde_variable(2, num_IOS - 1);
         }
@@ -227,7 +235,6 @@ namespace PSEU
                 num_IOS = (line[1] - '0') * 10 + (line[2] - '0');
                 v = line[4];
             }
-
             frm1.Disp_force('s', num_IOS, v.ToString());
             frm1.Cde_variable(3, num_IOS - 1);
         }
@@ -246,7 +253,6 @@ namespace PSEU
                 num_IOS = (line[1] - '0') * 10 + (line[2] - '0');
                 v = line[4];
             }
-
             frm1.Disp_force('o', num_IOS, v.ToString());
             frm1.Cde_variable(1, num_IOS - 1);
         }
@@ -268,10 +274,7 @@ namespace PSEU
                     break;
 
                 case '|':
-                    {
-                        string comment = line.Substring(j).TrimEnd('\r', '\n');
-                        label2.Text = comment;
-                    }
+                    label2.Text = line.Substring(j).TrimEnd('\r', '\n');
                     break;
 
                 case '*':
@@ -280,7 +283,8 @@ namespace PSEU
                 case 'p':
                     {
                         string prompt = line.Substring(j).TrimEnd('\r', '\n');
-                        if (MessageBox.Show(prompt, "Check", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                        if (MessageBox.Show(prompt, "Check", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+                            != DialogResult.Yes)
                         {
                             log_content += "\r\n>>> Test aborted by user <<<\r\n\r\n";
                             return false;
@@ -298,11 +302,12 @@ namespace PSEU
 
                 case 'c':
                     {
-                        // expecting "-c oX[or XX] Y"
+                        // parse "-c oNN V"
                         int oIdx = line.IndexOf('o');
                         if (oIdx < 0) break;
+
                         int num_IOS, valIdx;
-                        // two-digit?
+                        // two-digit channel?
                         if (oIdx + 2 < line.Length && char.IsDigit(line[oIdx + 1]) && char.IsDigit(line[oIdx + 2]))
                         {
                             num_IOS = (line[oIdx + 1] - '0') * 10 + (line[oIdx + 2] - '0');
@@ -310,19 +315,19 @@ namespace PSEU
                         }
                         else
                         {
-                            num_IOS = (line[oIdx + 1] - '0');
+                            num_IOS = line[oIdx + 1] - '0';
                             valIdx = oIdx + 3;
                         }
 
                         bool actual = frm1.outp[num_IOS - 1];
-                        bool wanted = (value);
+                        bool wanted = (line[valIdx] == '1');
 
-                        if (!condition)
+                        if (actual != wanted)
                         {
                             fail = true;
-                            var msg =
+                            string msg =
                                 $"Test failed while calling this command line (this is not a syntax error):\n" +
-                                $"{line} ({link} > line {lineNumber})\n\nDo you want to continue anyway?";
+                                $"{line} ({link} > line {lineNumber})\n\nContinue anyway?";
                             if (MessageBox.Show(msg, "Test failed !", MessageBoxButtons.YesNo, MessageBoxIcon.Error)
                                 != DialogResult.Yes)
                             {
@@ -333,32 +338,27 @@ namespace PSEU
                         }
                     }
                     break;
-
-                default:
-                    // unhandled dash-command
-                    break;
             }
 
             return true;
         }
 
-        private void DelayMicro(long targetTicks)
+        private void DelayMicro(long targetMicroseconds)
         {
             sw.Reset();
             sw.Start();
-            while (sw.ElapsedTicks / (Stopwatch.Frequency / (1_000_000L)) < targetTicks) ;
+            while ((sw.ElapsedTicks / (Stopwatch.Frequency / 1_000_000L)) < targetMicroseconds) ;
         }
 
         private void log_write(string date_start, string date_stop, bool success)
         {
-            var logDir = "./LOG";
-            Directory.SetCurrentDirectory(logDir);
+            Directory.SetCurrentDirectory("./LOG");
             var files = Directory.GetFiles(Directory.GetCurrentDirectory());
             string last = Path.GetFileName(files[files.Length - 1]);
             int no_file = int.Parse(Path.GetFileNameWithoutExtension(last)) + 1;
             string filename = $"{no_file}.LOG";
 
-            using var file = new StreamWriter(filename);
+            using var file = new StreamWriter(filename, false, Encoding.UTF8);
             var header = new StringBuilder();
             header.AppendLine("ELDEC France");
             header.AppendLine("Automatic test C27-J PSEU");
@@ -378,9 +378,9 @@ namespace PSEU
             footer.AppendLine(success ? "Automatic Test PASSED" : "Automatic Test FAILED");
             footer.AppendLine("End of test");
 
-            file.Write(header);
+            file.Write(header.ToString());
             file.Write(log_content);
-            file.Write(footer);
+            file.Write(footer.ToString());
 
             Directory.SetCurrentDirectory("..");
         }
@@ -389,8 +389,11 @@ namespace PSEU
         {
             if (commands.IsAlive)
             {
-                if (MessageBox.Show("Are you sure you want to terminate the process?", "Exit?", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
-                    == DialogResult.Yes)
+                if (MessageBox.Show(
+                    "Are you sure you want to terminate the process?",
+                    "Exit?",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question) == DialogResult.Yes)
                 {
                     cancel = true;
                     commands.Join();
