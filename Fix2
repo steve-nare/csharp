@@ -1,60 +1,412 @@
-private bool ValidateDash(string line, string filePath, int lineNumber)
+```csharp
+using System;
+using System.Diagnostics;       // pour Stopwatch
+using System.IO;                 // Gestion des fichiers
+using System.Threading;
+using System.Windows.Forms;
+using System.Text;
+using System.Drawing;
+
+namespace PSEU
 {
-    // Any "-|" at the very start is a comment—accept it.
-    if (line.StartsWith("-|", StringComparison.Ordinal))
-        return true;
-
-    // Otherwise strip the leading "-" and split on spaces
-    var tokens = line.Substring(1)
-                     .Trim()
-                     .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-
-    if (tokens.Length == 0)
-        return false;
-
-    switch (tokens[0])
+    public partial class Form3 : Form
     {
-        case "r":
-            return tokens.Length == 1;
+        readonly string link;
+        readonly bool logYN;
+        readonly string username;
+        readonly string SN;
+        readonly string comments;
+        readonly double glob_nbr_line;
 
-        case "g":
-            if (tokens.Length != 2) return false;
-            var atp = tokens[1].EndsWith(".ATP", StringComparison.OrdinalIgnoreCase)
-                      ? tokens[1]
-                      : tokens[1] + ".ATP";
-            var full = Path.Combine(AtpDirectory, atp);
-            if (!File.Exists(full))
+        double current_progress = 0;
+        int percent = 0;
+        string log_content = "";
+
+        readonly Form1 frm1;
+        readonly Thread commands;
+        bool cancel = false;
+        bool fail = false;
+
+        readonly Stopwatch sw = new Stopwatch();
+
+        public Form3(
+            string _link,
+            bool _logYN,
+            string _username,
+            string _SN,
+            string _comments,
+            double _glob_nbr_line,
+            Form1 _frm1)
+        {
+            InitializeComponent();
+            this.Activate();
+
+            link      = _link  ?? throw new ArgumentNullException(nameof(_link));
+            logYN     = _logYN;
+            username  = _username;
+            SN        = _SN;
+            comments  = _comments;
+            glob_nbr_line = _glob_nbr_line;
+            frm1      = _frm1  ?? throw new ArgumentNullException(nameof(_frm1));
+
+            // disable manual forcing while auto runs
+            frm1.Force_disable();
+
+            // prepare background work
+            commands = new Thread(Begin_Process) { IsBackground = true };
+            CheckForIllegalCrossThreadCalls = false;
+
+            toolStripStatusLabel1.Text = "Ready";
+
+            // make clickable area start the run
+            richTextBox1.Click += Display_Log_Files;
+        }
+
+        private void Display_Log_Files(object sender, EventArgs e)
+        {
+            toolStripProgressBar1.Visible = true;
+            commands.Start();
+        }
+
+        private void Begin_Process()
+        {
+            // clear UI
+            richTextBox1.Text = "";
+            label1.Text = "";
+            label2.Text = "";
+
+            // detach to prevent double-start
+            richTextBox1.Click -= Display_Log_Files;
+
+            toolStripProgressBar1.Minimum = 0;
+            toolStripProgressBar1.Maximum = 100;
+            SetProgress(0);
+
+            toolStripStatusLabel1.Text = "Running ATP...";
+
+            bool success = Start_Commands(link);
+            success &= !fail;
+
+            toolStripStatusLabel1.Text = success
+                ? "Test finished - SUCCESS !"
+                : "Test finished - FAIL !";
+
+            if (logYN)
             {
-                MessageBox.Show(
-                    this,
-                    $"{atp} not found in {AtpDirectory}",
-                    "Include File Missing",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
-                return false;
+                string date_stop = DateTime.Now.ToString();
+                log_write(DateTime.Now.ToString(), date_stop, success);
+            }
+
+            // re-enable manual forcing
+            frm1.Force_enable();
+            if (frm1.board != null) frm1.timer_feedback.Enabled = true;
+        }
+
+        private bool Start_Commands(string filePath)
+        {
+            // read all lines once
+            string[] lines = File.ReadAllLines(filePath);
+            int total = lines.Length;
+            for (int i = 0; i < total; i++)
+            {
+                // refresh bench status
+                frm1.Display_feedback();
+
+                // update per-line progress
+                int pctLine = i * 100 / total;
+                label1.Text   = Path.GetFileName(filePath) + "  ";
+                label11.Text  = pctLine + "%";
+                label111.Text = "line n° : " + (i + 1);
+
+                current_progress++;
+                percent = (int)(current_progress * 100 / glob_nbr_line);
+                toolStripStatusLabel1.Text = $"Running ATP... ({percent}%)";
+                SetProgress(percent);
+
+                string line = lines[i].TrimEnd('\r', '\n');
+                richTextBox1.AppendText(line + Environment.NewLine);
+                log_content += line + "\n";
+
+                if (cancel)
+                {
+                    log_content += "\r\n>>> Test aborted by user <<<\r\n\r\n";
+                    return false;
+                }
+
+                // find argument index (skip "-x ")
+                int j = (line.Length >= 3 && line[2] == ' ') ? 3 : 2;
+
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                switch (line[0])
+                {
+                    case 'p': HandleP(line); break;
+                    case 'i': HandleI(line); break;
+                    case 's': HandleS(line); break;
+                    case 'o': HandleO(line); break;
+                    case '-':
+                        if (!HandleDash(line, j, filePath, i + 1))
+                            return false;
+                        break;
+                    default:
+                        // ignore unrecognized blank or comment
+                        break;
+                }
+            }
+
+            frm1.Display_feedback();
+            return true;
+        }
+
+        private void HandleP(string line)
+        {
+            int ios   = line[1] - '0';
+            int value = line[3] - '0';
+            if (ios == 1 || ios == 2)
+            {
+                // supply toggles
+                bool on = value == 1;
+                frm1.Send_Address(on ? "0" : "1", 16 + ios + 1);
+                if (ios == 1) frm1.alim1 = on; else frm1.alim2 = on;
+                DelayMicro(10000);
+            }
+        }
+
+        private void HandleI(string line)
+        {
+            int ios, value;
+            if (line.Length == 5)
+            {
+                ios   = line[1] - '0';
+                value = line[3] - '0';
+            }
+            else
+            {
+                ios   = (line[1] - '0') * 10 + (line[2] - '0');
+                value = line[4] - '0';
+            }
+            frm1.Disp_force('i', ios, value.ToString());
+            frm1.Cde_variable(2, ios - 1);
+        }
+
+        private void HandleS(string line)
+        {
+            int ios;
+            char v;
+            if (line.Length == 5)
+            {
+                ios = line[1] - '0';
+                v   = line[3];
+            }
+            else
+            {
+                ios = (line[1] - '0') * 10 + (line[2] - '0');
+                v   = line[4];
+            }
+            frm1.Disp_force('s', ios, v.ToString());
+            frm1.Cde_variable(3, ios - 1);
+        }
+
+        private void HandleO(string line)
+        {
+            int ios;
+            char v;
+            if (line.Length == 5)
+            {
+                ios = line[1] - '0';
+                v   = line[3];
+            }
+            else
+            {
+                ios = (line[1] - '0') * 10 + (line[2] - '0');
+                v   = line[4];
+            }
+            frm1.Disp_force('o', ios, v.ToString());
+            frm1.Cde_variable(1, ios - 1);
+        }
+
+        private bool HandleDash(string line, int argIndex, string originalFile, int lineNumber)
+        {
+            switch (line[1])
+            {
+                case 'r':
+                    frm1.Cde_reset();
+                    break;
+
+                case 'g':
+                    {
+                        string includeName = line.Substring(argIndex).Trim() + ".ATP";
+                        string baseDir     = Path.GetDirectoryName(originalFile);
+                        string includePath = Path.Combine(baseDir, includeName);
+                        if (!File.Exists(includePath))
+                        {
+                            MessageBox.Show($"Included file not found:\n{includePath}",
+                                "File Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            return false;
+                        }
+                        if (!Start_Commands(includePath))
+                            return false;
+                    }
+                    break;
+
+                case '|':
+                    label2.Text = line.Substring(argIndex).Trim();
+                    break;
+
+                case '*':
+                    // global comment, ignore
+                    break;
+
+                case 'p':
+                    {
+                        string prompt = line.Substring(argIndex).Trim();
+                        if (MessageBox.Show(prompt, "Check", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+                            != DialogResult.Yes)
+                        {
+                            log_content += "\r\n>>> Test aborted by user <<<\r\n\r\n";
+                            return false;
+                        }
+                    }
+                    break;
+
+                case 'w':
+                    {
+                        string num = line.Substring(argIndex).Trim();
+                        if (int.TryParse(num, out int ms))
+                            DelayMicro(ms * 1000);
+                    }
+                    break;
+
+                case 'c':
+                    {
+                        // syntax: -c oX Y   or  -c oXX Y
+                        int oPos = line.IndexOf('o');
+                        if (oPos < 0) break;
+
+                        int ios, idxVal;
+                        if (char.IsDigit(line[oPos + 2]))
+                        {
+                            ios    = (line[oPos + 1] - '0') * 10 + (line[oPos + 2] - '0');
+                            idxVal = oPos + 4;
+                        }
+                        else
+                        {
+                            ios    = (line[oPos + 1] - '0');
+                            idxVal = oPos + 3;
+                        }
+                        if (idxVal >= line.Length) break;
+
+                        bool wanted = line[idxVal] == '1';
+                        bool actual = frm1.outp[ios - 1];
+
+                        if (actual != wanted)
+                        {
+                            fail = true;
+                            var msg =
+                                $"Test failed while calling this command line (this is not a syntax error):\n" +
+                                $"{line} ({Path.GetFileName(originalFile)} > line {lineNumber})\n\n" +
+                                "Do you want to continue anyway?";
+                            if (MessageBox.Show(msg, "Test failed!", MessageBoxButtons.YesNo, MessageBoxIcon.Error)
+                                != DialogResult.Yes)
+                                return false;
+
+                            log_content +=
+                                $"\r\n>>> Test failed with \"{line}\" ({originalFile} > line {lineNumber}) <<<\r\n\r\n";
+                        }
+                    }
+                    break;
+
+                default:
+                    // unknown dash-command, ignore
+                    break;
             }
             return true;
+        }
 
-        case "*":
-            return true;
+        private void DelayMicro(long targetMicroseconds)
+        {
+            sw.Restart();
+            while (sw.ElapsedTicks / (Stopwatch.Frequency / 1_000_000) < targetMicroseconds) ;
+            sw.Stop();
+        }
 
-        case "p":
-            return tokens.Length >= 2;
+        private void SetProgress(int value)
+        {
+            if (value < toolStripProgressBar1.Minimum) value = toolStripProgressBar1.Minimum;
+            if (value > toolStripProgressBar1.Maximum) value = toolStripProgressBar1.Maximum;
+            toolStripProgressBar1.Value = value;
+        }
 
-        case "w":
-            if (tokens.Length != 2) return false;
-            return int.TryParse(tokens[1], out _);
+        private void log_write(string date_start, string date_stop, bool success)
+        {
+            string logDir = Path.Combine(Application.StartupPath, "LOG");
+            Directory.CreateDirectory(logDir);
+            Directory.SetCurrentDirectory(logDir);
 
-        case "c":
-            if (tokens.Length != 3) return false;
-            if (!Regex.IsMatch(tokens[1], @"^[ois]\d{1,2}$"))
-                return false;
-            if (!int.TryParse(tokens[2], out var v) || (v != 0 && v != 1))
-                return false;
-            return true;
+            // get last log index
+            var files = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.LOG");
+            int max = 0;
+            foreach (var f in files)
+            {
+                if (int.TryParse(Path.GetFileNameWithoutExtension(f), out int n) && n > max)
+                    max = n;
+            }
+            string filename = (max + 1) + ".LOG";
 
-        default:
-            return false;
+            using var writer = new StreamWriter(filename);
+            var header = new StringBuilder();
+            header.AppendLine("ELDEC France");
+            header.AppendLine("Automatic test C27-J PSEU");
+            header.AppendLine($"User's name\t: {username}");
+            header.AppendLine($"Part number\t: 79A81");
+            header.AppendLine($"Serial number\t: {SN}");
+            header.AppendLine($"Comments\t: {comments}");
+            header.AppendLine($"Command File\t: {link}");
+            header.AppendLine();
+            header.AppendLine($"Date\t{date_start.Split(' ')[0]}");
+            header.AppendLine($"Time\t{date_start.Split(' ')[1]}");
+            header.AppendLine();
+
+            var footer = new StringBuilder();
+            footer.AppendLine();
+            footer.AppendLine($"Time\t{date_stop.Split(' ')[1]}");
+            footer.AppendLine(success ? "Automatic Test PASSED" : "Automatic Test FAILED");
+            footer.AppendLine("End of test");
+
+            writer.Write(header.ToString());
+            writer.Write(log_content);
+            writer.Write(footer.ToString());
+
+            Directory.SetCurrentDirectory("..");
+        }
+
+        private void Form3_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if (commands.IsAlive)
+            {
+                if (MessageBox.Show("Are you sure you want to terminate the process?", "Exit?", MessageBoxButtons.YesNo, MessageBoxIcon.Question)
+                    == DialogResult.Yes)
+                {
+                    cancel = true;
+                    commands.Join();
+                }
+                else
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
+            frm1.Force_enable();
+            if (frm1.board != null)
+                frm1.timer_feedback.Enabled = true;
+        }
     }
 }
+```  
+
+**What changed?**  
+- **No more** `Directory.SetCurrentDirectory("./ATP")` or “..” magic: we now open exactly the **absolute** path passed in.  
+- The `-g` include logic builds its path **relative** to the original file’s folder.  
+- A safe `SetProgress(...)` guard prevents the progress bar from ever going out of range (that was your “value must be between minimum and maximum” error).  
+
+With this in place, if you select an ATP in `…\ATP12\`, Form3 will process that exact file (and its `-g` children in the same folder) instead of defaulting back into `…\ATP\`.
